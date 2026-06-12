@@ -1,78 +1,123 @@
-require('dotenv').config();
 const express = require('express');
-const session = require('express-session');
-const { RedisStore } = require('connect-redis');
-const { createClient } = require('redis');
-const cors = require('cors');
+const SpotifyWebApi = require('spotify-web-api-node');
+const router = express.Router();
 
-const redisClient = createClient({ url: process.env.REDIS_URL });
-redisClient.connect().catch(console.error);
-
-const googleRoutes = require('../routes/google');
-const spotifyRoutes = require('../routes/spotify');
-const slackRoutes = require('../routes/slack');
-const microsoftRoutes = require('../routes/microsoft');
-const novaRoutes = require('../routes/nova');
-
-const app = express();
-const PORT = process.env.PORT || 3001;
-
-app.use(express.json());
-app.use(cors({
-  origin: [process.env.FRONTEND_URL || 'https://claude.ai', 'http://localhost:3000'],
-  credentials: true
-}));
-app.use(session({
-  store: new RedisStore({ client: redisClient }),
-  secret: process.env.SESSION_SECRET || 'nova-dev-secret',
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    secure: process.env.NODE_ENV === 'production',
-    httpOnly: true,
-    maxAge: 90 * 24 * 60 * 60 * 1000
+function getClient(tokens) {
+  const api = new SpotifyWebApi({
+    clientId: process.env.SPOTIFY_CLIENT_ID,
+    clientSecret: process.env.SPOTIFY_CLIENT_SECRET,
+    redirectUri: process.env.SPOTIFY_REDIRECT_URI
+  });
+  if (tokens) {
+    api.setAccessToken(tokens.accessToken);
+    api.setRefreshToken(tokens.refreshToken);
   }
-}));
+  return api;
+}
 
-app.use('/auth/google', googleRoutes);
-app.use('/auth/spotify', spotifyRoutes);
-app.use('/auth/slack', slackRoutes);
-app.use('/auth/microsoft', microsoftRoutes);
-app.use('/nova', novaRoutes);
+async function getRedis() {
+  const { createClient } = require('redis');
+  const client = createClient({ url: process.env.REDIS_URL });
+  await client.connect();
+  return client;
+}
 
-app.get('/', (req, res) => {
-  res.json({
-    status: 'NOVA backend online',
-    version: '1.0.0',
-    services: {
-      google: !!process.env.GOOGLE_CLIENT_ID,
-      spotify: !!process.env.SPOTIFY_CLIENT_ID,
-      slack: !!process.env.SLACK_CLIENT_ID,
-      microsoft: !!process.env.MICROSOFT_CLIENT_ID
-    }
-  });
+async function getTokens() {
+  const redis = await getRedis();
+  const data = await redis.get('tokens:spotify');
+  await redis.quit();
+  return data ? JSON.parse(data) : null;
+}
+
+async function saveTokens(tokens) {
+  const redis = await getRedis();
+  await redis.set('tokens:spotify', JSON.stringify(tokens));
+  await redis.quit();
+}
+
+router.get('/connect', (req, res) => {
+  const api = getClient();
+  const scopes = ['user-read-playback-state','user-modify-playback-state','user-read-currently-playing','playlist-read-private','user-library-read'];
+  res.redirect(api.createAuthorizeURL(scopes, 'nova'));
 });
 
-app.get('/status', (req, res) => {
-  res.json({
-    google: !!(req.session.googleTokens),
-    spotify: !!(req.session.spotifyTokens),
-    slack: !!(req.session.slackTokens),
-    microsoft: !!(req.session.microsoftTokens)
-  });
-});
-
-app.post('/disconnect/:service', (req, res) => {
-  const { service } = req.params;
-  const key = `${service}Tokens`;
-  if (req.session[key]) {
-    delete req.session[key];
-    res.json({ success: true, message: `${service} disconnected` });
-  } else {
-    res.json({ success: false, message: `${service} was not connected` });
+router.get('/callback', async (req, res) => {
+  const { code, error } = req.query;
+  if (error) return res.redirect('/?error=spotify_denied');
+  try {
+    const api = getClient();
+    const data = await api.authorizationCodeGrant(code);
+    await saveTokens({
+      accessToken: data.body.access_token,
+      refreshToken: data.body.refresh_token,
+      expiresAt: Date.now() + data.body.expires_in * 1000
+    });
+    res.redirect('/?connected=spotify');
+  } catch (err) {
+    console.error('Spotify OAuth error:', err.message);
+    res.redirect('/?error=spotify_failed');
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`\n🟣 NOVA Backend running on port ${PORT}`);
+router.get('/now-playing', async (req, res) => {
+  const tokens = await getTokens();
+  if (!tokens) return res.status(401).json({ error: 'Not connected to Spotify' });
+  try {
+    const api = getClient(tokens);
+    const data = await api.getMyCurrentPlayingTrack();
+    if (!data.body || !data.body.item) return res.json({ playing: false });
+    const track = data.body.item;
+    res.json({
+      playing: data.body.is_playing,
+      track: track.name,
+      artist: track.artists.map(a => a.name).join(', '),
+      album: track.album.name,
+      progress: data.body.progress_ms,
+      duration: track.duration_ms
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
+
+router.post('/play', async (req, res) => {
+  const tokens = await getTokens();
+  if (!tokens) return res.status(401).json({ error: 'Not connected' });
+  try { const api = getClient(tokens); await api.play(); res.json({ success: true }); }
+  catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/pause', async (req, res) => {
+  const tokens = await getTokens();
+  if (!tokens) return res.status(401).json({ error: 'Not connected' });
+  try { const api = getClient(tokens); await api.pause(); res.json({ success: true }); }
+  catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/next', async (req, res) => {
+  const tokens = await getTokens();
+  if (!tokens) return res.status(401).json({ error: 'Not connected' });
+  try { const api = getClient(tokens); await api.skipToNext(); res.json({ success: true }); }
+  catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/previous', async (req, res) => {
+  const tokens = await getTokens();
+  if (!tokens) return res.status(401).json({ error: 'Not connected' });
+  try { const api = getClient(tokens); await api.skipToPrevious(); res.json({ success: true }); }
+  catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/search-play', async (req, res) => {
+  const tokens = await getTokens();
+  if (!tokens) return res.status(401).json({ error: 'Not connected' });
+  const { query } = req.body;
+  try {
+    const api = getClient(tokens);
+    const results = await api.searchTracks(query, { limit: 1 });
+    const track = results.body.tracks.items[0];
+    if (!track) return res.json({ success: false, message: 'No track found' });
+    await api.play({ uris: [track.uri] });
+    res.json({ success: true, track: track.name, artist: track.artists[0].name });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+module.exports = router;
