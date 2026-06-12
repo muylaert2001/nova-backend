@@ -1,0 +1,24 @@
+{
+  "name": "nova-backend",
+  "version": "1.0.0",
+  "description": "NOVA AI Assistant Backend — OAuth + API integrations",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "express-session": "^1.17.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "googleapis": "^128.0.0",
+    "spotify-web-api-node": "^5.0.2",
+    "@slack/web-api": "^6.9.0",
+    "axios": "^1.6.0",
+    "node-cron": "^3.0.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}
