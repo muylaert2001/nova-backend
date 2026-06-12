@@ -3,14 +3,10 @@ const express = require('express');
 const session = require('express-session');
 const RedisStore = require('connect-redis').default;
 const { createClient } = require('redis');
+const cors = require('cors');
 
 const redisClient = createClient({ url: process.env.REDIS_URL });
 redisClient.connect().catch(console.error);
-
-
-const redisClient = createClient({ url: process.env.REDIS_URL });
-redisClient.connect().catch(console.error);;
-const cors = require('cors');
 
 const googleRoutes = require('../routes/google');
 const spotifyRoutes = require('../routes/spotify');
@@ -21,7 +17,11 @@ const novaRoutes = require('../routes/nova');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// ── Middleware ──
+app.use(express.json());
+app.use(cors({
+  origin: [process.env.FRONTEND_URL || 'https://claude.ai', 'http://localhost:3000'],
+  credentials: true
+}));
 app.use(session({
   store: new RedisStore({ client: redisClient }),
   secret: process.env.SESSION_SECRET || 'nova-dev-secret',
@@ -34,14 +34,12 @@ app.use(session({
   }
 }));
 
-// ── Routes ──
 app.use('/auth/google', googleRoutes);
 app.use('/auth/spotify', spotifyRoutes);
 app.use('/auth/slack', slackRoutes);
 app.use('/auth/microsoft', microsoftRoutes);
 app.use('/nova', novaRoutes);
 
-// ── Health check ──
 app.get('/', (req, res) => {
   res.json({
     status: 'NOVA backend online',
@@ -55,7 +53,6 @@ app.get('/', (req, res) => {
   });
 });
 
-// ── Auth status — which services are connected ──
 app.get('/status', (req, res) => {
   res.json({
     google: !!(req.session.googleTokens),
@@ -65,7 +62,6 @@ app.get('/status', (req, res) => {
   });
 });
 
-// ── Disconnect a service ──
 app.post('/disconnect/:service', (req, res) => {
   const { service } = req.params;
   const key = `${service}Tokens`;
@@ -79,6 +75,4 @@ app.post('/disconnect/:service', (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`\n🟣 NOVA Backend running on port ${PORT}`);
-  console.log(`   Health check: http://localhost:${PORT}/`);
-  console.log(`   Auth status:  http://localhost:${PORT}/status\n`);
 });
