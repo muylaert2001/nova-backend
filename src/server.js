@@ -3,11 +3,11 @@ const express = require('express');
 const session = require('express-session');
 const cors = require('cors');
 
-const googleRoutes = require('./routes/google');
-const spotifyRoutes = require('./routes/spotify');
-const slackRoutes = require('./routes/slack');
-const microsoftRoutes = require('./routes/microsoft');
-const novaRoutes = require('./routes/nova');
+const googleRoutes = require('../routes/google');
+const spotifyRoutes = require('../routes/spotify');
+const slackRoutes = require('../routes/slack');
+const microsoftRoutes = require('../routes/microsoft');
+const novaRoutes = require('../routes/nova');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
