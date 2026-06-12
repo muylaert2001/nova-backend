@@ -1,6 +1,16 @@
 require('dotenv').config();
 const express = require('express');
 const session = require('express-session');
+const RedisStore = require('connect-redis').default;
+const { createClient } = require('redis');
+
+const redisClient = createClient({ url: process.env.REDIS_URL });
+redisClient.connect().catch(console.error);
+const RedisStore = require('connect-redis').default;
+const { createClient } = require('redis');
+
+const redisClient = createClient({ url: process.env.REDIS_URL });
+redisClient.connect().catch(console.error);;
 const cors = require('cors');
 
 const googleRoutes = require('../routes/google');
@@ -13,19 +23,15 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // ── Middleware ──
-app.use(express.json());
-app.use(cors({
-  origin: [process.env.FRONTEND_URL || 'https://claude.ai', 'http://localhost:3000'],
-  credentials: true
-}));
 app.use(session({
+  store: new RedisStore({ client: redisClient }),
   secret: process.env.SESSION_SECRET || 'nova-dev-secret',
   resave: false,
   saveUninitialized: false,
   cookie: {
     secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
-    maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
+    maxAge: 90 * 24 * 60 * 60 * 1000
   }
 }));
 
