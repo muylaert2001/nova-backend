@@ -34,6 +34,19 @@ app.use(session({
   }
 }));
 
+app.get('/auth/spotify/connect', (req, res) => {
+  console.log('Direct spotify connect hit!');
+  const SpotifyWebApi = require('spotify-web-api-node');
+  const api = new SpotifyWebApi({
+    clientId: process.env.SPOTIFY_CLIENT_ID,
+    clientSecret: process.env.SPOTIFY_CLIENT_SECRET,
+    redirectUri: process.env.SPOTIFY_REDIRECT_URI
+  });
+  const scopes = ['user-read-playback-state','user-modify-playback-state','user-read-currently-playing','playlist-read-private','user-library-read'];
+  const url = api.createAuthorizeURL(scopes, 'nova');
+  console.log('URL:', url);
+  res.redirect(url);
+});
 app.use('/auth/google', googleRoutes);
 console.log('Loading spotify routes:', typeof spotifyRoutes);
 app.use('/auth/spotify', spotifyRoutes);
