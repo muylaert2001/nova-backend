@@ -8,11 +8,11 @@ const cors = require('cors');
 const redisClient = createClient({ url: process.env.REDIS_URL });
 redisClient.connect().catch(console.error);
 
-const googleRoutes = require('./routes/google');
-const spotifyRoutes = require('./routes/spotify');
-const slackRoutes = require('./routes/slack');
-const microsoftRoutes = require('./routes/microsoft');
-const novaRoutes = require('./routes/nova');
+const googleRoutes = require('../routes/google');
+const spotifyRoutes = require('../routes/spotify');
+const slackRoutes = require('../routes/slack');
+const microsoftRoutes = require('../routes/microsoft');
+const novaRoutes = require('../routes/nova');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
