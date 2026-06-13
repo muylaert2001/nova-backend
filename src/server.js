@@ -68,6 +68,14 @@ app.get('/status', async (req, res) => {
   }
 });
 
+app.get('/test-spotify', (req, res) => {
+  res.json({
+    clientId: process.env.SPOTIFY_CLIENT_ID ? 'SET' : 'MISSING',
+    clientSecret: process.env.SPOTIFY_CLIENT_SECRET ? 'SET' : 'MISSING',
+    redirectUri: process.env.SPOTIFY_REDIRECT_URI
+  });
+});
+
 app.listen(PORT, () => {
   console.log(`\n🟣 NOVA Backend running on port ${PORT}`);
 });
