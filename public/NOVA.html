@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NOVA — Neural Operative & Virtual Assistant</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#07020f;--surface:#0f0520;--border:rgba(167,139,250,0.18);--border-b:rgba(232,121,249,0.4);
+  --purple:#a78bfa;--pink:#e879f9;--rose:#f472b6;--text:#e2d9f3;--muted:#7c5c99;--dim:#3d2060;
+  --ok:#34d399;--warn:#fbbf24;--err:#f87171;
+}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;overflow-x:hidden}
+.app{display:flex;flex-direction:column;height:100vh;max-width:1200px;margin:0 auto}
+
+/* header */
+.header{display:flex;align-items:center;gap:12px;padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0}
+.orb{width:44px;height:44px;flex-shrink:0}
+.orb svg{width:44px;height:44px}
+.nova-title{font-size:20px;font-weight:700;letter-spacing:.2em;background:linear-gradient(90deg,#e879f9,#a78bfa,#f472b6);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.nova-sub{font-size:9px;color:var(--muted);letter-spacing:.18em;font-family:monospace;margin-top:2px}
+.hdr-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+.sdot{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 5px var(--ok)}
+.slbl{font-size:9px;font-family:monospace;letter-spacing:.14em;color:var(--ok)}
+.sync-badge{font-size:9px;font-family:monospace;color:var(--muted);padding:2px 6px;border:1px solid var(--dim);border-radius:3px}
+.sync-badge.ok{color:var(--ok);border-color:rgba(52,211,153,.3)}
+.tray-badge{font-size:9px;font-family:monospace;padding:2px 6px;border-radius:3px;border:1px solid var(--dim);color:var(--dim)}
+.tray-badge.ok{color:var(--pink);border-color:rgba(232,121,249,.3);background:rgba(232,121,249,.07)}
+
+/* wake bar */
+.wake-bar{display:flex;align-items:center;justify-content:center;gap:10px;padding:5px 16px;background:rgba(124,58,237,.04);border-bottom:1px solid var(--border);font-size:9px;font-family:monospace;letter-spacing:.14em;color:var(--dim);flex-shrink:0}
+.wake-bar.on{color:var(--pink);background:rgba(232,121,249,.07)}
+.wdot{width:5px;height:5px;border-radius:50%;background:var(--dim)}
+.wake-bar.on .wdot{background:var(--pink);box-shadow:0 0 5px var(--pink);animation:kp .7s ease-in-out infinite}
+.wtoggle{padding:2px 8px;border-radius:3px;border:1px solid var(--dim);background:transparent;color:var(--muted);font-size:9px;font-family:monospace;cursor:pointer;transition:all .2s}
+.wtoggle.on{border-color:rgba(232,121,249,.4);color:var(--pink);background:rgba(232,121,249,.08)}
+
+/* service bar */
+.svc-bar{display:flex;gap:6px;padding:6px 14px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;overflow-x:auto;scrollbar-width:none}
+.svc-bar::-webkit-scrollbar{display:none}
+.svc-pill{display:flex;align-items:center;gap:4px;font-size:8px;font-family:monospace;padding:2px 8px;border-radius:3px;letter-spacing:.08em;border:1px solid var(--dim);color:var(--dim);white-space:nowrap;cursor:default}
+.svc-pill.connected{color:var(--ok);border-color:rgba(52,211,153,.3);background:rgba(52,211,153,.05)}
+.svc-pill.playing{color:var(--pink);border-color:rgba(232,121,249,.3);background:rgba(232,121,249,.05)}
+.svc-pill.tray-connected{color:var(--purple);border-color:rgba(167,139,250,.3);background:rgba(167,139,250,.05)}
+
+/* agent tabs */
+.agent-bar{display:flex;gap:4px;padding:7px 12px;background:var(--surface);border-bottom:1px solid var(--border);overflow-x:auto;flex-shrink:0;scrollbar-width:none}
+.agent-bar::-webkit-scrollbar{display:none}
+.atab{display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:5px;border:1px solid var(--dim);background:transparent;color:var(--muted);font-size:10px;font-family:monospace;letter-spacing:.08em;cursor:pointer;white-space:nowrap;transition:all .2s;flex-shrink:0}
+.atab:hover{border-color:var(--purple);color:var(--purple)}
+.atab.active{background:rgba(167,139,250,.12);border-color:var(--purple);color:var(--purple)}
+.adot{width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.7}
+.atab.active .adot{opacity:1;box-shadow:0 0 4px currentColor}
+
+/* body */
+.body{display:flex;flex:1;overflow:hidden}
+
+/* sidebar */
+.sidebar{width:220px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;flex-shrink:0}
+.ss{padding:10px;border-bottom:1px solid var(--border);overflow-y:auto}
+.ss.flex1{flex:1}
+.ss.maxh{max-height:160px}
+.slabel{font-size:8px;font-family:monospace;letter-spacing:.16em;color:var(--dim);margin-bottom:7px}
+.titem{display:flex;align-items:flex-start;gap:7px;padding:5px 0;border-bottom:1px solid rgba(167,139,250,.06)}
+.titem:last-child{border-bottom:none}
+.tchk{width:13px;height:13px;border:1px solid var(--dim);border-radius:3px;flex-shrink:0;margin-top:1px;display:flex;align-items:center;justify-content:center;font-size:8px;cursor:pointer;transition:all .2s}
+.tchk.done{background:rgba(167,139,250,.2);border-color:var(--purple);color:var(--purple)}
+.ttxt{font-size:11px;color:var(--text);line-height:1.4;flex:1}
+.ttxt.done{color:var(--dim);text-decoration:line-through}
+.tpri{font-size:8px;font-family:monospace;padding:1px 4px;border-radius:2px;flex-shrink:0}
+.ph{background:rgba(248,113,113,.1);color:#f87171;border:1px solid rgba(248,113,113,.2)}
+.pm{background:rgba(251,191,36,.1);color:#fbbf24;border:1px solid rgba(251,191,36,.2)}
+.pl{background:rgba(52,211,153,.1);color:#34d399;border:1px solid rgba(52,211,153,.2)}
+.add-btn{width:100%;padding:5px;background:rgba(167,139,250,.05);border:1px dashed var(--dim);border-radius:4px;color:var(--muted);font-size:10px;font-family:monospace;cursor:pointer;text-align:center;transition:all .2s;margin-top:6px}
+.add-btn:hover{border-color:var(--purple);color:var(--purple)}
+.mitem{font-size:10px;color:var(--muted);padding:3px 0;border-bottom:1px solid rgba(167,139,250,.05);line-height:1.4;font-family:monospace}
+.mitem:last-child{border-bottom:none}
+.mitem span{color:var(--purple)}
+
+/* chat */
+.chat-area{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.wf{display:flex;align-items:center;justify-content:center;gap:2px;height:28px;padding:0 14px;background:rgba(124,58,237,.03);border-bottom:1px solid var(--border);flex-shrink:0}
+.wb{width:3px;border-radius:2px;background:var(--dim);transition:height .05s ease,background .3s}
+.msgs{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:12px;scrollbar-width:thin;scrollbar-color:rgba(124,58,237,.3) transparent}
+.msgs::-webkit-scrollbar{width:3px}
+.msgs::-webkit-scrollbar-thumb{background:rgba(124,58,237,.3);border-radius:2px}
+.mrow{display:flex;gap:9px;align-items:flex-start;animation:fup .22s ease}
+.mrow.user{flex-direction:row-reverse}
+.av{width:26px;height:26px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:8px;font-family:monospace;font-weight:700}
+.av.nova{background:rgba(232,121,249,.1);border:1px solid rgba(232,121,249,.3);color:#e879f9}
+.av.user{background:rgba(167,139,250,.12);border:1px solid rgba(167,139,250,.3);color:#a78bfa}
+.bub{max-width:78%;padding:10px 14px;border-radius:10px;font-size:13px;line-height:1.65;white-space:pre-wrap}
+.bub.nova{background:rgba(232,121,249,.05);border:1px solid rgba(232,121,249,.12);border-bottom-left-radius:2px}
+.bub.user{background:rgba(167,139,250,.08);border:1px solid rgba(167,139,250,.15);border-bottom-right-radius:2px;color:#c4b5fd;font-family:monospace;font-size:12px}
+.blbl{font-size:8px;font-family:monospace;letter-spacing:.18em;color:var(--muted);margin-bottom:4px}
+.abadge{display:inline-flex;align-items:center;gap:3px;font-size:8px;font-family:monospace;padding:2px 5px;border-radius:2px;margin-bottom:5px;letter-spacing:.1em}
+.ab-nova{background:rgba(232,121,249,.1);color:#e879f9;border:1px solid rgba(232,121,249,.2)}
+.ab-research{background:rgba(56,189,248,.1);color:#38bdf8;border:1px solid rgba(56,189,248,.2)}
+.ab-tasks{background:rgba(167,139,250,.1);color:#a78bfa;border:1px solid rgba(167,139,250,.2)}
+.ab-code{background:rgba(52,211,153,.1);color:#34d399;border:1px solid rgba(52,211,153,.2)}
+.ab-system{background:rgba(251,191,36,.1);color:#fbbf24;border:1px solid rgba(251,191,36,.2)}
+.tdots{display:flex;gap:4px;align-items:center;padding:2px 0}
+.tdots s{display:block;width:6px;height:6px;border-radius:50%;background:var(--purple);animation:kp 1.2s ease infinite}
+.tdots s:nth-child(2){animation-delay:.2s}
+.tdots s:nth-child(3){animation-delay:.4s}
+
+/* input */
+.inp-area{padding:10px 14px 12px;border-top:1px solid var(--border);background:var(--surface);flex-shrink:0}
+.tprev{font-size:11px;font-style:italic;color:var(--pink);background:rgba(232,121,249,.07);border-radius:4px;padding:3px 7px;margin-bottom:7px;display:none}
+.tprev.show{display:block}
+.irow{display:flex;gap:8px;align-items:center}
+.mic-btn{width:38px;height:38px;border-radius:50%;flex-shrink:0;border:1.5px solid rgba(167,139,250,.3);background:rgba(124,58,237,.1);color:var(--purple);font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s}
+.mic-btn.active{border-color:var(--pink);background:rgba(232,121,249,.2);color:var(--pink);box-shadow:0 0 12px rgba(232,121,249,.3)}
+.mic-btn.wake-lit{border-color:rgba(232,121,249,.7);box-shadow:0 0 16px rgba(232,121,249,.5);animation:kp .8s ease infinite}
+.txtin{flex:1;background:rgba(124,58,237,.07);border:1px solid rgba(167,139,250,.2);border-radius:7px;padding:9px 13px;color:var(--text);font-size:13px;outline:none;transition:border .2s;font-family:inherit}
+.txtin:focus{border-color:rgba(232,121,249,.4)}
+.txtin::placeholder{color:var(--dim);font-style:italic}
+.snd-btn{padding:9px 16px;background:rgba(232,121,249,.12);border:1px solid rgba(232,121,249,.35);border-radius:7px;color:var(--pink);font-size:10px;font-family:monospace;letter-spacing:.12em;cursor:pointer;transition:all .2s;white-space:nowrap}
+.snd-btn:hover{background:rgba(232,121,249,.2)}
+
+/* now playing */
+.np-bar{display:flex;align-items:center;gap:8px;padding:5px 14px;background:rgba(232,121,249,.04);border-top:1px solid rgba(232,121,249,.1);font-size:9px;font-family:monospace;color:var(--muted);flex-shrink:0}
+.np-track{color:var(--pink);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.np-controls{display:flex;gap:4px}
+.np-btn{background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:12px;padding:2px 5px;transition:color .2s}
+.np-btn:hover{color:var(--pink)}
+
+/* modal */
+.moverlay{position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;z-index:100;opacity:0;pointer-events:none;transition:opacity .2s}
+.moverlay.open{opacity:1;pointer-events:all}
+.mdl{background:#0f0520;border:1px solid var(--border-b);border-radius:9px;padding:18px;width:min(340px,88vw)}
+.mdl h3{font-size:12px;font-family:monospace;letter-spacing:.15em;color:var(--pink);margin-bottom:12px}
+.mdl input,.mdl select{width:100%;background:rgba(124,58,237,.08);border:1px solid var(--border);border-radius:5px;padding:7px 10px;color:var(--text);font-size:12px;outline:none;margin-bottom:8px;font-family:inherit}
+.mdl input::placeholder{color:var(--dim)}
+.mbtns{display:flex;gap:7px;justify-content:flex-end;margin-top:2px}
+.mbtns button{padding:6px 12px;border-radius:5px;font-size:10px;font-family:monospace;letter-spacing:.1em;cursor:pointer}
+.bcnl{background:transparent;border:1px solid var(--dim);color:var(--muted)}
+.badd{background:rgba(232,121,249,.15);border:1px solid rgba(232,121,249,.4);color:var(--pink)}
+
+/* wake toast */
+.wtoast{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) scale(.85);background:rgba(15,5,32,.97);border:1px solid var(--border-b);border-radius:10px;padding:16px 24px;text-align:center;z-index:200;pointer-events:none;opacity:0;transition:opacity .25s,transform .25s}
+.wtoast.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
+
+/* mobile */
+.sidebar-toggle{display:none;width:32px;height:32px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:16px;cursor:pointer;align-items:center;justify-content:center;flex-shrink:0}
+
+@keyframes kp{0%,100%{opacity:.35;transform:scale(.8)}50%{opacity:1;transform:scale(1.2)}}
+@keyframes fup{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}
+@keyframes orbspin{from{stroke-dashoffset:0}to{stroke-dashoffset:-100}}
+
+@media(max-width:640px){
+  .sidebar{position:absolute;left:0;top:0;bottom:0;z-index:50;transform:translateX(-100%);width:250px;transition:transform .3s}
+  .sidebar.open{transform:translateX(0)}
+  .sidebar-toggle{display:flex}
+  .nova-title{font-size:15px}
+  .nova-sub{display:none}
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- Wake toast -->
+<div class="wtoast" id="wtoast">
+  <div style="font-size:28px;margin-bottom:6px">💜</div>
+  <div style="font-size:13px;font-family:monospace;letter-spacing:.15em;color:var(--pink)">I'M LISTENING</div>
+</div>
+
+<!-- Header -->
+<div class="header">
+  <button class="sidebar-toggle" id="sidebarToggle">☰</button>
+  <div class="orb">
+    <svg viewBox="0 0 44 44">
+      <circle cx="22" cy="22" r="20" fill="none" stroke="rgba(167,139,250,.2)" stroke-width="1"/>
+      <circle cx="22" cy="22" r="15" fill="none" stroke="#a78bfa" stroke-width="1.5" stroke-dasharray="12 4" id="orbRing" style="transform-origin:22px 22px"/>
+      <circle cx="22" cy="22" r="9" fill="rgba(124,58,237,.5)"/>
+      <circle cx="22" cy="22" r="4" fill="rgba(232,121,249,.9)"/>
+      <circle cx="20" cy="20" r="1.5" fill="rgba(255,255,255,.6)"/>
+    </svg>
+  </div>
+  <div>
+    <div class="nova-title">N O V A</div>
+    <div class="nova-sub">NEURAL OPERATIVE & VIRTUAL ASSISTANT</div>
+  </div>
+  <div class="hdr-right">
+    <span class="tray-badge" id="trayBadge">TRAY: CHECKING...</span>
+    <span class="sync-badge" id="syncBadge">SYNC...</span>
+    <div class="sdot" id="sDot"></div>
+    <span class="slbl" id="sLbl">STANDBY</span>
+  </div>
+</div>
+
+<!-- Wake bar -->
+<div class="wake-bar" id="wakeBar">
+  <div class="wdot" id="wDot"></div>
+  <span id="wakeBarTxt">WAKE WORD OFF</span>
+  <button class="wtoggle" id="wakeToggle" onclick="toggleWake()">ENABLE</button>
+</div>
+
+<!-- Service bar -->
+<div class="svc-bar">
+  <div class="svc-pill" id="svc-spotify">⚫ Spotify</div>
+  <div class="svc-pill" id="svc-google">⚫ Gmail</div>
+  <div class="svc-pill" id="svc-calendar">⚫ Calendar</div>
+  <div class="svc-pill" id="svc-computer">💻 Computer</div>
+  <div class="svc-pill" id="svc-system">🌐 Web Search</div>
+</div>
+
+<!-- Agent tabs -->
+<div class="agent-bar">
+  <button class="atab active" data-agent="nova" onclick="switchAgent('nova')"><span class="adot"></span>NOVA</button>
+  <button class="atab" data-agent="research" onclick="switchAgent('research')"><span class="adot"></span>RESEARCH</button>
+  <button class="atab" data-agent="tasks" onclick="switchAgent('tasks')"><span class="adot"></span>TASKS</button>
+  <button class="atab" data-agent="code" onclick="switchAgent('code')"><span class="adot"></span>CODE</button>
+  <button class="atab" data-agent="system" onclick="switchAgent('system')"><span class="adot"></span>SYSTEM</button>
+</div>
+
+<!-- Body -->
+<div class="body">
+  <div class="sidebar" id="sidebar">
+    <div class="ss flex1" style="overflow-y:auto">
+      <div class="slabel">TASK QUEUE</div>
+      <div id="taskList"></div>
+      <button class="add-btn" onclick="openModal()">+ ADD TASK</button>
+    </div>
+    <div class="ss maxh" style="overflow-y:auto">
+      <div class="slabel">NOVA MEMORY</div>
+      <div id="memList"></div>
+    </div>
+  </div>
+  <div class="chat-area">
+    <div class="wf" id="wf"></div>
+    <div class="msgs" id="msgs"></div>
+    <div class="inp-area">
+      <div class="tprev" id="tprev"></div>
+      <div class="irow">
+        <button class="mic-btn" id="micBtn" onclick="toggleListen()" title="Click to speak or say Hey NOVA">🎙</button>
+        <input class="txtin" id="txtin" placeholder="Ask NOVA anything… or say Hey NOVA" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMsg()}"/>
+        <button class="snd-btn" onclick="sendMsg()">SEND ›</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Now playing bar -->
+<div class="np-bar" id="npBar" style="display:none">
+  <span>♫</span>
+  <span class="np-track" id="npTrack">Nothing playing</span>
+  <div class="np-controls">
+    <button class="np-btn" onclick="spotifyControl('previous')" title="Previous">⏮</button>
+    <button class="np-btn" id="npPlayBtn" onclick="spotifyControl('toggle')" title="Play/Pause">⏸</button>
+    <button class="np-btn" onclick="spotifyControl('next')" title="Next">⏭</button>
+  </div>
+</div>
+</div>
+
+<!-- Modal -->
+<div class="moverlay" id="moverlay">
+  <div class="mdl">
+    <h3>NEW TASK</h3>
+    <input id="tInput" placeholder="What needs to be done?" onkeydown="if(event.key==='Enter')addTask()"/>
+    <select id="tPri">
+      <option value="high">High priority</option>
+      <option value="med" selected>Medium priority</option>
+      <option value="low">Low priority</option>
+    </select>
+    <div class="mbtns">
+      <button class="bcnl" onclick="closeModal()">Cancel</button>
+      <button class="badd" onclick="addTask()">Add Task</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const BACKEND='https://nova-backend-production-de74.up.railway.app';
+const LOCAL_API='http://localhost:7878';
+const API_KEY='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';
+
+const AGENTS={
+  nova:{name:"NOVA",badge:"ab-nova",sys:`You are NOVA — Neural Operative & Virtual Assistant. Warm, precise, quietly brilliant. Web search enabled. You can control the user's computer via the tray app, play Spotify, check Gmail, manage Google Calendar. Be concise but complete. Calm authority with warmth. When users mention something memorable, acknowledge it naturally. For computer commands, confirm what you're doing.`},
+  research:{name:"Research Agent",badge:"ab-research",sys:"You are NOVA's Research Agent. Deep information gathering specialist with web search. Thorough, analytical, precise. Cite sources and surface key insights."},
+  tasks:{name:"Task Agent",badge:"ab-tasks",sys:"You are NOVA's Task Agent. Help manage, prioritize and reason about tasks. Break goals into steps, identify blockers, give productivity advice. Be encouraging and organized."},
+  code:{name:"Code Agent",badge:"ab-code",sys:"You are NOVA's Code Agent. Expert software engineer. Write clean well-commented code in any language. Debug, explain, review, architect. Expert but approachable."},
+  system:{name:"System Agent",badge:"ab-system",sys:"You are NOVA's System Agent. You control the user's Windows computer via the local tray app API. You can open apps, files, folders, control volume, take screenshots, check system stats, search Google, open YouTube, and more. When asked to do something, do it and confirm."}
+};
+
+let agent="nova",loading=false,listening=false,wakeOn=false,wakeRec=null,activeRec=null;
+let voiceEnabled=true,voiceState="idle",liveTranscript="";
+let tasks=[],memories=[],histories={
+  nova:[{role:"assistant",content:"Hello. NOVA online.\n\nI'm your Neural Operative & Virtual Assistant. I can:\n• Control your computer (open apps, files, volume, screenshots)\n• Play music on Spotify\n• Check your Gmail and Calendar\n• Search the web for anything\n• Help with tasks, research, and code\n\nSay \"Hey NOVA\" or click the mic to talk. What can I do for you?"}],
+  research:[],tasks:[],code:[],system:[]
+};
+let waveTimer=null,isPlaying=false,trayConnected=false;
+
+/* ── Storage ── */
+async function save(){
+  try{
+    if(window.storage){
+      await window.storage.set("nv-tasks",JSON.stringify(tasks));
+      await window.storage.set("nv-mem",JSON.stringify(memories));
+      await window.storage.set("nv-hist",JSON.stringify(histories));
+    }
+    syncBadge(true);
+  }catch{syncBadge(false)}
+}
+async function load(){
+  try{
+    if(window.storage){
+      const t=await window.storage.get("nv-tasks");if(t)tasks=JSON.parse(t.value);
+      const m=await window.storage.get("nv-mem");if(m)memories=JSON.parse(m.value);
+      const h=await window.storage.get("nv-hist");if(h){const d=JSON.parse(h.value);Object.keys(AGENTS).forEach(k=>{if(d[k]&&d[k].length)histories[k]=d[k]});}
+    }
+    syncBadge(true);
+  }catch{syncBadge(false)}
+  renderTasks();renderMem();renderMsgs();
+}
+function syncBadge(ok){const b=document.getElementById("syncBadge");b.textContent=ok?"SYNCED":"LOCAL";b.className="sync-badge"+(ok?" ok":"")}
+
+/* ── Tray app connection ── */
+async function checkTray(){
+  try{
+    const r=await fetch(`${LOCAL_API}/ping`,{signal:AbortSignal.timeout(2000)});
+    const d=await r.json();
+    if(d.status){
+      trayConnected=true;
+      const tb=document.getElementById("trayBadge");tb.textContent="TRAY: ONLINE";tb.className="tray-badge ok";
+      const cp=document.getElementById("svc-computer");cp.className="svc-pill tray-connected";cp.textContent="💻 Computer: ON";
+    }
+  }catch{
+    trayConnected=false;
+    const tb=document.getElementById("trayBadge");tb.textContent="TRAY: OFFLINE";tb.className="tray-badge";
+    const cp=document.getElementById("svc-computer");cp.className="svc-pill";cp.textContent="💻 Computer: OFF";
+  }
+}
+
+async function computerAction(action,param){
+  if(!trayConnected)return"Computer control unavailable — make sure the NOVA tray app is running.";
+  try{
+    const r=await fetch(`${LOCAL_API}/computer`,{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({action,param})
+    });
+    const d=await r.json();
+    return d.result||d.error||"Done.";
+  }catch(e){return`Error: ${e.message}`}
+}
+
+/* ── Backend services ── */
+async function checkServices(){
+  try{
+    const r=await fetch(`${BACKEND}/status`,{credentials:'include'});
+    const d=await r.json();
+    if(d.spotify){document.getElementById("svc-spotify").className="svc-pill connected";document.getElementById("svc-spotify").textContent="✓ Spotify";fetchNowPlaying();}
+    else{document.getElementById("svc-spotify").textContent="⚫ Spotify — connect at "+BACKEND+"/auth/spotify/connect";}
+    if(d.google){
+      document.getElementById("svc-google").className="svc-pill connected";document.getElementById("svc-google").textContent="✓ Gmail";
+      document.getElementById("svc-calendar").className="svc-pill connected";document.getElementById("svc-calendar").textContent="✓ Calendar";
+    }
+  }catch(e){}
+}
+
+async function fetchNowPlaying(){
+  try{
+    const r=await fetch(`${BACKEND}/auth/spotify/now-playing`,{credentials:'include'});
+    const d=await r.json();
+    if(d.playing&&d.track){
+      isPlaying=true;
+      document.getElementById("npBar").style.display="flex";
+      document.getElementById("npTrack").textContent=`${d.track} — ${d.artist}`;
+      document.getElementById("npPlayBtn").textContent="⏸";
+      document.getElementById("svc-spotify").className="svc-pill playing";
+      document.getElementById("svc-spotify").textContent=`♫ ${d.track.substring(0,20)}`;
+    }else{isPlaying=false;document.getElementById("npPlayBtn").textContent="▶";}
+  }catch(e){}
+}
+
+async function spotifyControl(action){
+  try{
+    if(action==="toggle")action=isPlaying?"pause":"play";
+    await fetch(`${BACKEND}/auth/spotify/${action}`,{method:"POST",credentials:"include"});
+    if(action==="pause"){isPlaying=false;document.getElementById("npPlayBtn").textContent="▶";}
+    else if(action==="play"){isPlaying=true;document.getElementById("npPlayBtn").textContent="⏸";}
+    setTimeout(fetchNowPlaying,1000);
+  }catch(e){}
+}
+
+/* ── Waveform ── */
+function buildWave(){const w=document.getElementById("wf");w.innerHTML="";for(let i=0;i<32;i++){const d=document.createElement("div");d.className="wb";d.style.height="3px";w.appendChild(d)}}
+function animWave(s){
+  clearInterval(waveTimer);
+  const bars=document.querySelectorAll(".wb");
+  const cols={listening:"#e879f9",thinking:"#a78bfa",speaking:"#f472b6"};
+  const amps={listening:22,thinking:12,speaking:26};
+  if(s==="idle"){bars.forEach(b=>{b.style.height="3px";b.style.background="var(--dim)"});return}
+  let t=0;
+  waveTimer=setInterval(()=>{bars.forEach((b,i)=>{const h=4+Math.abs(Math.sin(i/bars.length*Math.PI*3+t))*amps[s];b.style.height=h+"px";b.style.background=cols[s]});t+=0.1},40);
+}
+function setOrb(s){
+  const r=document.getElementById("orbRing");if(!r)return;
+  const c={idle:"#a78bfa",listening:"#e879f9",thinking:"#a78bfa",speaking:"#f472b6"};
+  r.style.stroke=c[s]||"#a78bfa";
+  r.style.animation=s==="idle"?"none":"orbspin 2s linear infinite";
+}
+function setStatus(s,lbl){
+  voiceState=s;
+  const dot=document.getElementById("sDot"),l=document.getElementById("sLbl");
+  const cs={idle:"var(--ok)",listening:"var(--pink)",thinking:"var(--purple)",speaking:"var(--rose)"};
+  dot.style.background=cs[s]||"var(--ok)";
+  dot.style.boxShadow=`0 0 5px ${cs[s]||"var(--ok)"}`;
+  l.style.color=cs[s]||"var(--ok)";
+  l.textContent=lbl;
+  animWave(s==="idle"?"idle":s);setOrb(s==="idle"?"idle":s);
+}
+
+/* ── Wake word ── */
+function toggleWake(){
+  wakeOn=!wakeOn;
+  const btn=document.getElementById("wakeToggle"),bar=document.getElementById("wakeBar"),txt=document.getElementById("wakeBarTxt");
+  if(wakeOn){btn.textContent="DISABLE";btn.className="wtoggle on";bar.className="wake-bar on";txt.textContent='LISTENING FOR "HEY NOVA"';startWakeListener();}
+  else{btn.textContent="ENABLE";btn.className="wtoggle";bar.className="wake-bar";txt.textContent="WAKE WORD OFF";stopWakeListener();}
+}
+function startWakeListener(){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR)return;
+  function loop(){
+    if(!wakeOn)return;
+    const r=new SR();r.continuous=false;r.interimResults=true;r.lang="en-US";wakeRec=r;
+    r.onresult=e=>{
+      const t=Array.from(e.results).map(x=>x[0].transcript).join("").toLowerCase().trim();
+      if(t.includes("hey nova")||t.includes("ok nova")||t.includes("okay nova")){r.stop();wakeRec=null;onWakeDetected();return;}
+    };
+    r.onend=()=>{if(wakeOn&&!listening)setTimeout(loop,400)};
+    r.onerror=()=>{if(wakeOn&&!listening)setTimeout(loop,1200)};
+    try{r.start()}catch(e){}
+  }
+  loop();
+}
+function stopWakeListener(){if(wakeRec){try{wakeRec.stop()}catch(e){}wakeRec=null}}
+function onWakeDetected(){
+  stopWakeListener();
+  window.speechSynthesis?.cancel();
+  const toast=document.getElementById("wtoast");toast.className="wtoast show";setTimeout(()=>toast.className="wtoast",1800);
+  const mb=document.getElementById("micBtn");mb.classList.add("wake-lit");setTimeout(()=>mb.classList.remove("wake-lit"),1800);
+  speakText("Yes?");
+  setTimeout(()=>startActiveListening(),500);
+}
+
+/* ── Active listening ── */
+function toggleListen(){if(listening){stopActiveListening();return}startActiveListening()}
+function startActiveListening(){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR)return;
+  window.speechSynthesis?.cancel();
+  if(wakeRec){try{wakeRec.stop()}catch(e){}wakeRec=null}
+  listening=true;liveTranscript="";
+  const mb=document.getElementById("micBtn");mb.classList.add("active");
+  const r=new SR();r.continuous=false;r.interimResults=true;r.lang="en-US";activeRec=r;
+  r.onstart=()=>setStatus("listening","LISTENING");
+  r.onresult=e=>{
+    const t=Array.from(e.results).map(x=>x[0].transcript).join("");
+    liveTranscript=t;
+    const p=document.getElementById("tprev");p.textContent=`🎙 "${t}"`;p.className="tprev show";
+    document.getElementById("txtin").value=t;
+  };
+  r.onerror=()=>{listening=false;mb.classList.remove("active");activeRec=null;setStatus("idle","STANDBY");if(wakeOn)setTimeout(startWakeListener,500)};
+  r.onend=()=>{
+    listening=false;mb.classList.remove("active");activeRec=null;
+    const captured=liveTranscript.trim();liveTranscript="";
+    if(captured)setTimeout(()=>sendMsg(captured),80);
+    else{setStatus("idle","STANDBY");if(wakeOn)setTimeout(startWakeListener,500);}
+  };
+  try{r.start()}catch(e){listening=false;mb.classList.remove("active")}
+}
+function stopActiveListening(){
+  if(activeRec){try{activeRec.stop()}catch(e){}activeRec=null}
+  listening=false;document.getElementById("micBtn").classList.remove("active");setStatus("idle","STANDBY");
+}
+
+/* ── Send message ── */
+async function sendMsg(override){
+  const inp=document.getElementById("txtin");
+  const text=(override||inp.value).trim();
+  if(!text||loading)return;
+  inp.value="";liveTranscript="";
+  document.getElementById("tprev").className="tprev";
+  loading=true;setStatus("thinking","PROCESSING");
+  histories[agent].push({role:"user",content:text});
+  renderMsgs();extractMem(text);
+
+  const lower=text.toLowerCase();
+  let computerResult=null;
+
+  // ── Computer control commands ──
+  if(trayConnected){
+    if(lower.includes('open spotify'))computerResult=await computerAction('openApp','spotify');
+    else if(lower.includes('open chrome'))computerResult=await computerAction('openApp','chrome');
+    else if(lower.includes('open brave'))computerResult=await computerAction('openApp','brave');
+    else if(lower.includes('open firefox'))computerResult=await computerAction('openApp','firefox');
+    else if(lower.includes('open notepad'))computerResult=await computerAction('openApp','notepad');
+    else if(lower.includes('open calculator'))computerResult=await computerAction('openApp','calculator');
+    else if(lower.includes('open word'))computerResult=await computerAction('openApp','word');
+    else if(lower.includes('open excel'))computerResult=await computerAction('openApp','excel');
+    else if(lower.includes('open paint'))computerResult=await computerAction('openApp','paint');
+    else if(lower.includes('open discord'))computerResult=await computerAction('openApp','discord');
+    else if(lower.includes('open settings'))computerResult=await computerAction('openApp','settings');
+    else if(lower.includes('open task manager'))computerResult=await computerAction('openApp','task manager');
+    else if(lower.includes('open file explorer')||lower.includes('open explorer'))computerResult=await computerAction('openApp','file explorer');
+    else if(lower.includes('open downloads'))computerResult=await computerAction('openDownloads');
+    else if(lower.includes('open documents'))computerResult=await computerAction('openDocuments');
+    else if(lower.includes('open desktop'))computerResult=await computerAction('openDesktop');
+    else if(lower.includes('open youtube')&&!lower.includes('search'))computerResult=await computerAction('openUrl','https://www.youtube.com');
+    else if(lower.includes('search youtube for')||lower.includes('youtube search'))computerResult=await computerAction('openYoutube',text.replace(/search youtube for|youtube search/gi,'').trim());
+    else if(lower.includes('search google for')||lower.includes('google search'))computerResult=await computerAction('googleSearch',text.replace(/search google for|google search/gi,'').trim());
+    else if(lower.includes('go to ')&&(lower.includes('.com')||lower.includes('.org')||lower.includes('.net')))computerResult=await computerAction('openUrl',text.replace(/go to/gi,'').trim());
+    else if(lower.includes('volume up'))computerResult=await computerAction('volumeUp');
+    else if(lower.includes('volume down'))computerResult=await computerAction('volumeDown');
+    else if(lower.includes('mute')||lower.includes('unmute'))computerResult=await computerAction('mute');
+    else if(lower.includes('screenshot')||lower.includes('take a screenshot'))computerResult=await computerAction('screenshot');
+    else if(lower.includes('lock screen')||lower.includes('lock my screen'))computerResult=await computerAction('lockScreen');
+    else if(lower.includes('empty recycle bin'))computerResult=await computerAction('emptyRecycleBin');
+    else if(lower.includes('system info')||lower.includes('how is my computer')||lower.includes('computer status'))computerResult=await computerAction('getSystemInfo');
+    else if(lower.includes('my ip')||lower.includes('ip address'))computerResult=await computerAction('getIPAddress');
+    else if(lower.includes('shut down')||lower.includes('shutdown'))computerResult=await computerAction('shutdown');
+    else if(lower.includes('cancel shutdown'))computerResult=await computerAction('cancelShutdown');
+    else if(lower.includes('restart')||lower.includes('reboot'))computerResult=await computerAction('restart');
+    else if(lower.includes('sleep mode')||lower.includes('go to sleep'))computerResult=await computerAction('sleep');
+    else if(lower.includes('wifi settings'))computerResult=await computerAction('openWifi');
+    else if(lower.includes('bluetooth'))computerResult=await computerAction('openBluetooth');
+    else if(lower.includes('display settings'))computerResult=await computerAction('openDisplay');
+    else if(lower.includes('sound settings'))computerResult=await computerAction('openSound');
+    else if(lower.includes('windows update')||lower.includes('check for updates'))computerResult=await computerAction('checkUpdates');
+    else if(lower.includes('clipboard')||lower.includes('what did i copy'))computerResult=await computerAction('getClipboard');
+  }
+
+  if(computerResult){
+    histories[agent].push({role:"assistant",content:computerResult});
+    loading=false;setStatus("idle","STANDBY");renderMsgs();save();
+    if(voiceEnabled)speakText(computerResult);
+    return;
+  }
+
+  // ── Spotify voice commands ──
+  if(lower.includes("play ")&&(lower.includes("spotify")||lower.includes("music")||lower.includes("song")||lower.includes("play some"))){
+    const query=text.replace(/play|on spotify|music|song|some/gi,"").trim();
+    try{
+      const r=await fetch(`${BACKEND}/auth/spotify/search-play`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({query})});
+      const d=await r.json();
+      if(d.success){
+        const reply=`Playing "${d.track}" by ${d.artist} on Spotify.`;
+        histories[agent].push({role:"assistant",content:reply});
+        loading=false;setStatus("idle","STANDBY");renderMsgs();save();
+        if(voiceEnabled)speakText(reply);
+        setTimeout(fetchNowPlaying,1500);return;
+      }
+    }catch(e){}
+  }
+  if(lower==="pause music"||lower==="pause spotify"||lower==="stop music"){
+    await spotifyControl("pause");
+    const reply="Music paused.";
+    histories[agent].push({role:"assistant",content:reply});
+    loading=false;setStatus("idle","STANDBY");renderMsgs();save();
+    if(voiceEnabled)speakText(reply);return;
+  }
+  if(lower.includes("next song")||lower.includes("skip song")||lower==="skip"){
+    await spotifyControl("next");
+    const reply="Skipping to next track.";
+    histories[agent].push({role:"assistant",content:reply});
+    loading=false;setStatus("idle","STANDBY");renderMsgs();save();
+    if(voiceEnabled)speakText(reply);return;
+  }
+
+  // ── AI response ──
+  try{
+    const res=await fetch("https://api.anthropic.com/v1/messages",{
+      method:"POST",
+      headers:{"Content-Type":"application/json","x-api-key":API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+      body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,system:AGENTS[agent].sys,tools:[{type:"web_search_20250305",name:"web_search"}],messages:histories[agent].map(m=>({role:m.role,content:m.content}))})
+    });
+    const data=await res.json();
+    const reply=data.content?.filter(b=>b.type==="text").map(b=>b.text).join("")||"A systems error occurred.";
+    histories[agent].push({role:"assistant",content:reply});
+    loading=false;setStatus("idle","STANDBY");renderMsgs();save();
+    if(voiceEnabled)speakText(reply);
+  }catch(e){
+    histories[agent].push({role:"assistant",content:"A systems error occurred. Please try again."});
+    loading=false;setStatus("idle","STANDBY");renderMsgs();
+    if(wakeOn)setTimeout(startWakeListener,500);
+  }
+}
+
+/* ── Speech synthesis ── */
+function speakText(text){
+  if(!window.speechSynthesis||!voiceEnabled)return;
+  window.speechSynthesis.cancel();
+  const clean=text.replace(/[*_`#>]/g,"").replace(/\n+/g,". ").substring(0,600);
+  const u=new SpeechSynthesisUtterance(clean);u.rate=0.92;u.pitch=1.15;u.volume=1;
+  const sv=()=>{
+    const vs=window.speechSynthesis.getVoices();
+    const pv=vs.find(v=>v.name.includes("Aria")||v.name.includes("Jenny")||v.name.includes("Samantha")||v.name.includes("Karen")||v.name.includes("Victoria")||((v.lang||"").startsWith("en")&&(v.name||"").toLowerCase().includes("female")))||vs.find(v=>(v.lang||"").startsWith("en"))||vs[0];
+    if(pv)u.voice=pv;
+  };
+  sv();if(!window.speechSynthesis.getVoices().length)window.speechSynthesis.onvoiceschanged=sv;
+  u.onstart=()=>setStatus("speaking","SPEAKING");
+  u.onend=()=>{setStatus("idle","STANDBY");if(wakeOn)setTimeout(startWakeListener,600)};
+  u.onerror=()=>{setStatus("idle","STANDBY");if(wakeOn)setTimeout(startWakeListener,600)};
+  window.speechSynthesis.speak(u);
+}
+
+/* ── Memory ── */
+function extractMem(text){
+  const triggers=["my name is","i am ","i'm ","i work","i live","remember that","note that","don't forget"];
+  if(triggers.some(t=>text.toLowerCase().includes(t))){
+    const m=text.length>80?text.substring(0,80)+"…":text;
+    if(!memories.find(x=>x===m)){memories.unshift(m);if(memories.length>8)memories.pop();renderMem();}
+  }
+}
+
+/* ── Render ── */
+function switchAgent(a){agent=a;document.querySelectorAll(".atab").forEach(t=>t.classList.remove("active"));document.querySelector(`[data-agent="${a}"]`).classList.add("active");renderMsgs()}
+
+function renderMsgs(){
+  const el=document.getElementById("msgs");const hist=histories[agent];el.innerHTML="";
+  if(!hist.length){el.innerHTML=`<div style="text-align:center;color:var(--dim);font-size:11px;font-family:monospace;margin-top:32px">${AGENTS[agent].name} ready.</div>`;return}
+  hist.forEach(msg=>{
+    const row=document.createElement("div");row.className="mrow"+(msg.role==="user"?" user":"");
+    const av=document.createElement("div");av.className="av "+(msg.role==="user"?"user":"nova");av.textContent=msg.role==="user"?"YOU":"N";
+    const bub=document.createElement("div");bub.className="bub "+(msg.role==="user"?"user":"nova");
+    if(msg.role==="assistant"){
+      const l=document.createElement("div");l.className="blbl";l.textContent=AGENTS[agent].name+" ◆";bub.appendChild(l);
+      const b=document.createElement("div");b.className="abadge "+AGENTS[agent].badge;b.textContent=AGENTS[agent].name.toUpperCase();bub.appendChild(b);
+    }
+    const t=document.createElement("div");t.textContent=msg.content;bub.appendChild(t);
+    row.appendChild(av);row.appendChild(bub);el.appendChild(row);
+  });
+  if(loading){
+    const row=document.createElement("div");row.className="mrow";
+    const av=document.createElement("div");av.className="av nova";av.textContent="N";
+    const bub=document.createElement("div");bub.className="bub nova";
+    const l=document.createElement("div");l.className="blbl";l.textContent=AGENTS[agent].name+" ◆";bub.appendChild(l);
+    const d=document.createElement("div");d.className="tdots";[0,1,2].forEach(()=>{const s=document.createElement("s");d.appendChild(s)});
+    bub.appendChild(d);row.appendChild(av);row.appendChild(bub);el.appendChild(row);
+  }
+  requestAnimationFrame(()=>el.scrollTop=el.scrollHeight);
+}
+
+function renderTasks(){
+  const el=document.getElementById("taskList");
+  if(!tasks.length){el.innerHTML=`<div style="font-size:10px;color:var(--dim);font-family:monospace;text-align:center;padding:4px 0">No tasks yet</div>`;return}
+  el.innerHTML="";
+  tasks.forEach((tk,i)=>{
+    const d=document.createElement("div");d.className="titem";
+    const c=document.createElement("div");c.className="tchk"+(tk.done?" done":"");c.textContent=tk.done?"✓":"";c.onclick=()=>{tasks[i].done=!tasks[i].done;save();renderTasks()};
+    const t=document.createElement("div");t.className="ttxt"+(tk.done?" done":"");t.textContent=tk.text;
+    const p=document.createElement("div");p.className="tpri p"+tk.priority[0];p.textContent=tk.priority.toUpperCase();
+    d.appendChild(c);d.appendChild(t);d.appendChild(p);el.appendChild(d);
+  });
+}
+
+function renderMem(){
+  const el=document.getElementById("memList");
+  if(!memories.length){el.innerHTML=`<div style="font-size:10px;color:var(--dim);font-family:monospace;text-align:center">No memories yet</div>`;return}
+  el.innerHTML="";
+  memories.forEach(m=>{const d=document.createElement("div");d.className="mitem";d.innerHTML=`<span>◆</span> ${m}`;el.appendChild(d)});
+}
+
+function openModal(){document.getElementById("moverlay").classList.add("open");document.getElementById("tInput").focus()}
+function closeModal(){document.getElementById("moverlay").classList.remove("open");document.getElementById("tInput").value=""}
+function addTask(){const v=document.getElementById("tInput").value.trim();if(!v)return;tasks.unshift({text:v,priority:document.getElementById("tPri").value,done:false,id:Date.now()});save();renderTasks();closeModal()}
+
+document.getElementById("sidebarToggle").onclick=()=>document.getElementById("sidebar").classList.toggle("open");
+
+/* ── Init ── */
+buildWave();
+load();
+checkTray();
+checkServices();
+setInterval(checkTray,15000);
+setInterval(fetchNowPlaying,30000);
+setInterval(checkServices,60000);
+setStatus("idle","STANDBY");
+</script>
+</body>
+</html>
