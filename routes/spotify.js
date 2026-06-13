@@ -45,11 +45,11 @@ router.get('/connect', (req, res) => {
     });
     const scopes = ['user-read-playback-state','user-modify-playback-state','user-read-currently-playing','playlist-read-private','user-library-read'];
     const url = api.createAuthorizeURL(scopes, 'nova');
-    console.log('Redirecting to Spotify:', url);
+    console.log('Spotify URL:', url);
     res.redirect(url);
   } catch(err) {
-    console.error('Spotify connect error:', err.message);
-    res.redirect('/?error=spotify_connect_failed');
+    console.error('Connect error:', err.message);
+    res.json({ error: err.message });
   }
 });
 
