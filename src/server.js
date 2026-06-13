@@ -19,7 +19,7 @@ const PORT = process.env.PORT || 3001;
 
 app.use(express.json());
 app.use(cors({
-  origin: [process.env.FRONTEND_URL || 'https://claude.ai', 'http://localhost:3000'],
+  origin: true,
   credentials: true
 }));
 app.use(session({
@@ -36,7 +36,6 @@ app.use(session({
 
 app.use('/auth/google', googleRoutes);
 console.log('Loading spotify routes:', typeof spotifyRoutes);
-app.use('/auth/spotify', spotifyRoutes);
 app.use('/auth/spotify', spotifyRoutes);
 app.use('/auth/slack', slackRoutes);
 app.use('/auth/microsoft', microsoftRoutes);
