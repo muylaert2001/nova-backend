@@ -45,7 +45,7 @@ app.get('/auth/spotify/connect', (req, res) => {
   const scopes = ['user-read-playback-state','user-modify-playback-state','user-read-currently-playing','playlist-read-private','user-library-read'];
   const url = api.createAuthorizeURL(scopes, 'nova');
   console.log('URL:', url);
-  res.redirect(url);
+  res.send(`<html><body><script>window.location.href='${url}'</script><a href="${url}">Click here to connect Spotify</a></body></html>`);
 });
 app.use('/auth/google', googleRoutes);
 console.log('Loading spotify routes:', typeof spotifyRoutes);
