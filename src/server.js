@@ -4,6 +4,7 @@ const session = require('express-session');
 const { RedisStore } = require('connect-redis');
 const { createClient } = require('redis');
 const cors = require('cors');
+const path = require('path');
 
 const redisClient = createClient({ url: process.env.REDIS_URL });
 redisClient.connect().catch(console.error);
@@ -17,6 +18,7 @@ const novaRoutes = require('../routes/nova');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+app.use(express.static(path.join(__dirname, '../public')));
 app.use(express.json());
 app.use(cors({
   origin: true,
