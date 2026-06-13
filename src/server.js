@@ -35,6 +35,8 @@ app.use(session({
 }));
 
 app.use('/auth/google', googleRoutes);
+console.log('Loading spotify routes:', typeof spotifyRoutes);
+app.use('/auth/spotify', spotifyRoutes);
 app.use('/auth/spotify', spotifyRoutes);
 app.use('/auth/slack', slackRoutes);
 app.use('/auth/microsoft', microsoftRoutes);
