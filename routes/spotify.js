@@ -37,9 +37,20 @@ async function saveTokens(tokens) {
 }
 
 router.get('/connect', (req, res) => {
-  const api = getClient();
-  const scopes = ['user-read-playback-state','user-modify-playback-state','user-read-currently-playing','playlist-read-private','user-library-read'];
-  res.redirect(api.createAuthorizeURL(scopes, 'nova'));
+  try {
+    const api = new SpotifyWebApi({
+      clientId: process.env.SPOTIFY_CLIENT_ID,
+      clientSecret: process.env.SPOTIFY_CLIENT_SECRET,
+      redirectUri: process.env.SPOTIFY_REDIRECT_URI
+    });
+    const scopes = ['user-read-playback-state','user-modify-playback-state','user-read-currently-playing','playlist-read-private','user-library-read'];
+    const url = api.createAuthorizeURL(scopes, 'nova');
+    console.log('Redirecting to Spotify:', url);
+    res.redirect(url);
+  } catch(err) {
+    console.error('Spotify connect error:', err.message);
+    res.redirect('/?error=spotify_connect_failed');
+  }
 });
 
 router.get('/callback', async (req, res) => {
