@@ -72,9 +72,17 @@ router.get('/callback', async (req, res) => {
 });
 
 router.get('/now-playing', async (req, res) => {
-  const tokens = await getTokens();
+  let tokens = await getTokens();
   if (!tokens) return res.status(401).json({ error: 'Not connected to Spotify' });
   try {
+    // Refresh token if expired
+    if (Date.now() > tokens.expiresAt - 60000) {
+      const api = getClient(tokens);
+      const data = await api.refreshAccessToken();
+      tokens.accessToken = data.body.access_token;
+      tokens.expiresAt = Date.now() + data.body.expires_in * 1000;
+      await saveTokens(tokens);
+    }
     const api = getClient(tokens);
     const data = await api.getMyCurrentPlayingTrack();
     if (!data.body || !data.body.item) return res.json({ playing: false });
