@@ -132,6 +132,70 @@ app.post('/api/chat', async (req, res) => {
   }
 });
 
+app.post('/api/sms', async (req, res) => {
+  try {
+    const twilio = require('twilio')(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+    const { to, message } = req.body;
+    const result = await twilio.messages.create({
+      body: message,
+      from: process.env.TWILIO_PHONE_NUMBER,
+      to: to
+    });
+    res.json({ success: true, sid: result.sid });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/reminders', async (req, res) => {
+  try {
+    const { message, dueAt, phone } = req.body;
+    const id = Date.now().toString();
+    const reminder = { id, message, dueAt, phone, sent: false };
+    await redisClient.set('reminder:' + id, JSON.stringify(reminder));
+    res.json({ success: true, id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/reminders', async (req, res) => {
+  try {
+    const keys = await redisClient.keys('reminder:*');
+    const reminders = [];
+    for (const key of keys) {
+      const data = await redisClient.get(key);
+      if (data) reminders.push(JSON.parse(data));
+    }
+    res.json({ reminders });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+setInterval(async () => {
+  try {
+    const keys = await redisClient.keys('reminder:*');
+    const now = Date.now();
+    for (const key of keys) {
+      const data = await redisClient.get(key);
+      if (!data) continue;
+      const reminder = JSON.parse(data);
+      if (!reminder.sent && new Date(reminder.dueAt).getTime() <= now) {
+        console.log('Reminder due:', reminder.message);
+        if (reminder.phone) {
+          try {
+            const twilio = require('twilio')(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+            await twilio.messages.create({ body: 'AVA Reminder: ' + reminder.message, from: process.env.TWILIO_PHONE_NUMBER, to: reminder.phone });
+          } catch (e) { console.log('SMS reminder failed:', e.message); }
+        }
+        reminder.sent = true;
+        await redisClient.set(key, JSON.stringify(reminder));
+      }
+    }
+  } catch (err) { console.log('Reminder check error:', err.message); }
+}, 60000);
+
 app.listen(PORT, () => {
   console.log(`\n🟣 NOVA Backend running on port ${PORT}`);
   console.log(`   Health check: http://localhost:${PORT}/`);
