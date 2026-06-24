@@ -122,7 +122,10 @@ router.post('/search-play', async (req, res) => {
     const results = await api.searchTracks(query, { limit: 1 });
     const track = results.body.tracks.items[0];
     if (!track) return res.json({ success: false, message: 'No track found' });
-    await api.play({ uris: [track.uri] });
+    const devices = await api.getMyDevices();
+    const activeDevice = devices.body.devices.find(d => d.is_active) || devices.body.devices[0];
+    if (!activeDevice) return res.json({ success: false, message: 'No Spotify device found. Please open Spotify on a device first.' });
+    await api.play({ uris: [track.uri], device_id: activeDevice.id });
     res.json({ success: true, track: track.name, artist: track.artists[0].name });
   } catch (err) {
     res.status(500).json({ error: err.message });

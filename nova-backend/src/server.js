@@ -1,6 +1,11 @@
 require('dotenv').config();
 const express = require('express');
 const session = require('express-session');
+const { createClient } = require('redis');
+const { RedisStore } = require('connect-redis');
+
+const redisClient = createClient({ url: process.env.REDIS_URL || 'redis://127.0.0.1:6379' });
+redisClient.connect().catch(console.error);
 const cors = require('cors');
 
 const googleRoutes = require('../routes/google');
@@ -20,6 +25,7 @@ app.use(cors({
   credentials: true
 }));
 app.use(session({
+  store: new RedisStore({ client: redisClient, prefix: 'sess:' }),
   secret: process.env.SESSION_SECRET || 'nova-dev-secret',
   resave: false,
   saveUninitialized: false,
@@ -91,10 +97,6 @@ app.post('/disconnect/:service', (req, res) => {
     res.json({ success: false, message: `${service} was not connected` });
   }
 });
-
-const { createClient } = require('redis');
-const redisClient = createClient({ url: process.env.REDIS_URL || 'redis://127.0.0.1:6379' });
-redisClient.connect().catch(console.error);
 
 app.get('/api/memory/:key', async (req, res) => {
   try {
