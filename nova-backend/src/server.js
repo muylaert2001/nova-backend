@@ -196,6 +196,20 @@ setInterval(async () => {
   } catch (err) { console.log('Reminder check error:', err.message); }
 }, 60000);
 
+app.post('/api/reminders/:id/notified', async (req, res) => {
+  try {
+    const data = await redisClient.get('reminder:' + req.params.id);
+    if (data) {
+      const reminder = JSON.parse(data);
+      reminder.notified = true;
+      await redisClient.set('reminder:' + req.params.id, JSON.stringify(reminder));
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`\n🟣 NOVA Backend running on port ${PORT}`);
   console.log(`   Health check: http://localhost:${PORT}/`);
