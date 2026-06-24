@@ -212,6 +212,31 @@ app.post('/api/reminders/:id/notified', async (req, res) => {
   }
 });
 
+
+const multer = require('multer');
+const upload = multer({ storage: multer.memoryStorage() });
+
+app.post('/api/transcribe', upload.single('audio'), async (req, res) => {
+  try {
+    const axios = require('axios');
+    const FormData = require('form-data');
+    const form = new FormData();
+    form.append('file', req.file.buffer, { filename: 'audio.webm', contentType: req.file.mimetype });
+    form.append('model', 'whisper-1');
+
+    const response = await axios.post('https://api.openai.com/v1/audio/transcriptions', form, {
+      headers: {
+        'Authorization': 'Bearer ' + process.env.OPENAI_API_KEY,
+        ...form.getHeaders()
+      }
+    });
+
+    res.json(response.data);
+  } catch (err) {
+    res.status(500).json({ error: err.response ? JSON.stringify(err.response.data) : err.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`\n🟣 NOVA Backend running on port ${PORT}`);
   console.log(`   Health check: http://localhost:${PORT}/`);

@@ -186,8 +186,51 @@ function toggleWake(){wakeOn=!wakeOn;var btn=document.getElementById('wakeBtn');
 function startWake(){var SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR)return;function loop(){if(!wakeOn)return;var r=new SR();r.continuous=false;r.interimResults=true;r.lang='en-US';wakeRec=r;r.onresult=function(e){var t=Array.from(e.results).map(function(x){return x[0].transcript}).join('').toLowerCase().trim();if(t==='hey ava'||t==='ok ava'||t.startsWith('hey ava ')||t.startsWith('ok ava ')){r.stop();wakeRec=null;onWake();}};r.onend=function(){if(wakeOn&&!listening)setTimeout(loop,400);};r.onerror=function(){if(wakeOn&&!listening)setTimeout(loop,1200);};try{r.start();}catch(e){}}loop();}
 function stopWake(){if(wakeRec){try{wakeRec.stop();}catch(e){}wakeRec=null;}}
 function onWake(){stopWake();window.speechSynthesis&&window.speechSynthesis.cancel();var mb=document.getElementById('micBtn');mb.classList.add('on');speakText('Yes?');setTimeout(startListen,1500);}
+var mediaRecorder=null;var audioChunks=[];
 function toggleListen(){if(listening){stopListen();return;}startListen();}
-function startListen(){var SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR)return;window.speechSynthesis&&window.speechSynthesis.cancel();if(wakeRec){try{wakeRec.stop();}catch(e){}wakeRec=null;}listening=true;liveT='';var mb=document.getElementById('micBtn');mb.classList.add('on');var r=new SR();r.continuous=false;r.interimResults=true;r.lang='en-US';activeRec=r;r.onstart=function(){setSt('listening');};r.onresult=function(e){var t=Array.from(e.results).map(function(x){return x[0].transcript}).join('');liveT=t;var p=document.getElementById('tprev');p.textContent='"'+t+'"';p.className='tprev show';document.getElementById('txtin').value=t;};r.onerror=function(){listening=false;mb.classList.remove('on');activeRec=null;setSt('idle');if(wakeOn)setTimeout(startWake,500);};r.onend=function(){listening=false;mb.classList.remove('on');activeRec=null;var cap=liveT.trim();liveT='';if(cap)setTimeout(function(){sendMsg(cap);},80);else{setSt('idle');if(wakeOn)setTimeout(startWake,500);}};try{r.start();}catch(e){listening=false;mb.classList.remove('on');}}
+async function startListen(){
+  window.speechSynthesis&&window.speechSynthesis.cancel();
+  if(wakeRec){try{wakeRec.stop();}catch(e){}wakeRec=null;}
+  try{
+    var stream=await navigator.mediaDevices.getUserMedia({audio:true});
+    listening=true;
+    var mb=document.getElementById('micBtn');mb.classList.add('on');
+    setSt('listening');
+    audioChunks=[];
+    mediaRecorder=new MediaRecorder(stream);
+    mediaRecorder.ondataavailable=function(e){audioChunks.push(e.data);};
+    mediaRecorder.onstop=async function(){
+      mb.classList.remove('on');
+      listening=false;
+      setSt('thinking');
+      stream.getTracks().forEach(function(t){t.stop();});
+      var blob=new Blob(audioChunks,{type:'audio/webm'});
+      if(blob.size<1000){setSt('idle');if(wakeOn)setTimeout(startWake,500);return;}
+      var formData=new FormData();
+      formData.append('audio',blob,'audio.webm');
+      try{
+        var res=await fetch(B+'/api/transcribe',{method:'POST',credentials:'include',body:formData});
+        var data=await res.json();
+        var text=data.text?data.text.trim():'';
+        if(text){
+          var p=document.getElementById('tprev');p.textContent='"'+text+'"';p.className='tprev show';
+          setTimeout(function(){sendMsg(text);},80);
+        }else{
+          setSt('idle');if(wakeOn)setTimeout(startWake,500);
+        }
+      }catch(e){
+        setSt('idle');if(wakeOn)setTimeout(startWake,500);
+      }
+    };
+    mediaRecorder.start();
+    setTimeout(function(){if(mediaRecorder&&mediaRecorder.state==='recording')mediaRecorder.stop();},8000);
+  }catch(e){
+    listening=false;
+    var mb2=document.getElementById('micBtn');mb2.classList.remove('on');
+    setSt('idle');
+  }
+}
+function stopListenRecording(){if(mediaRecorder&&mediaRecorder.state==='recording')mediaRecorder.stop();}
 function stopListen(){if(activeRec){try{activeRec.stop();}catch(e){}activeRec=null;}listening=false;document.getElementById('micBtn').classList.remove('on');setSt('idle');}
 async function sendMsg(override){var inp=document.getElementById('txtin');var text=override||inp.value.trim();if(!text||loading)return;inp.value='';liveT='';document.getElementById('tprev').className='tprev';loading=true;setSt('thinking');hists[agent].push({role:'user',content:text});renderMsgs();saveMem(text);var low=text.toLowerCase(),cr=null;var cmds={'open spotify':'openApp:spotify','open chrome':'openApp:chrome','open brave':'openApp:brave','open notepad':'openApp:notepad','open calculator':'openApp:calculator','open word':'openApp:word','open excel':'openApp:excel','open discord':'openApp:discord','open settings':'openApp:settings','open task manager':'openApp:task manager','open paint':'openApp:paint','open file explorer':'openApp:file explorer','open downloads':'openDownloads','open documents':'openDocuments','open desktop':'openDesktop','volume up':'volumeUp','volume down':'volumeDown','mute':'mute','screenshot':'screenshot','lock screen':'lockScreen','system info':'getSystemInfo','my ip':'getIPAddress','shut down':'shutdown','cancel shutdown':'cancelShutdown','restart':'restart'};for(var k in cmds){if(low.includes(k)){var pts=cmds[k].split(':');cr=await runCmd(pts[0],pts[1]);break;}}if(!cr&&low.includes('open youtube')&&!low.includes('search'))cr=await runCmd('openUrl','https://www.youtube.com');else if(!cr&&low.includes('search youtube for'))cr=await runCmd('openYoutube',text.replace(/search youtube for/gi,'').trim());else if(!cr&&low.includes('search google for'))cr=await runCmd('googleSearch',text.replace(/search google for/gi,'').trim());if(cr){hists[agent].push({role:'assistant',content:cr});loading=false;setSt('idle');renderMsgs();save();speakText(cr);return;}
 if(low.includes('play ')&&(low.includes('spotify')||low.includes('music')||low.includes('song'))){var q=text.replace(/play|on spotify|music|song/gi,'').trim();try{var sr=await fetch(B+'/auth/spotify/search-play',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:q})});var sd2=await sr.json();if(sd2.success){var rep='Playing "'+sd2.track+'" by '+sd2.artist+'.';hists[agent].push({role:'assistant',content:rep});loading=false;setSt('idle');renderMsgs();save();speakText(rep);setTimeout(fetchNP,1500);return;}}catch(e){}}
