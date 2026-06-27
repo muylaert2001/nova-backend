@@ -181,7 +181,25 @@ async function load(){try{var r=await fetch(B+'/api/memory/av-data');var d=await
 async function checkSvcs(){try{var r=await fetch(B+'/status',{credentials:'include'});var d=await r.json();if(d.spotify){document.getElementById('p-spotify').className='spill ok';document.getElementById('p-spotify').textContent='Spotify';fetchNP();}if(d.google){document.getElementById('p-gmail').className='spill ok';document.getElementById('p-gmail').textContent='Gmail';}}catch(e){}try{var r2=await fetch(L+'/ping',{signal:AbortSignal.timeout(2000)});if((await r2.json()).status){document.getElementById('p-computer').className='spill ok';document.getElementById('p-computer').textContent='Computer';}}catch(e){}}
 async function fetchNP(){try{var r=await fetch(B+'/auth/spotify/now-playing',{credentials:'include'});var d=await r.json();if(d.playing&&d.track){isPlaying=true;document.getElementById('npBar').style.display='flex';document.getElementById('nptr').textContent=d.track+' - '+d.artist;document.getElementById('npPlay').textContent='||';document.getElementById('p-spotify').textContent='Now: '+d.track.substring(0,12);}}catch(e){}}
 async function spCtrl(action){try{if(action==='toggle')action=isPlaying?'pause':'play';await fetch(B+'/auth/spotify/'+action,{method:'POST',credentials:'include'});isPlaying=action==='play';document.getElementById('npPlay').textContent=isPlaying?'||':'>';setTimeout(fetchNP,1000);}catch(e){}}
-async function runCmd(action,param){try{var r=await fetch(L+'/computer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:action,param:param})});var d=await r.json();return d.result||d.error||'Done.';}catch(e){return 'Computer control unavailable.';}}
+async function runCmd(action,param){
+  try{
+    var res=await fetch(B+'/api/tray/command',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:action,param:param})});
+    var data=await res.json();
+    if(!data.commandId){return data.error||'Tray command failed.';}
+    var commandId=data.commandId;
+    for(var i=0;i<60;i++){
+      await new Promise(function(r){setTimeout(r,500);});
+      var rr=await fetch(B+'/api/tray/result/'+commandId,{credentials:'include'});
+      var rd=await rr.json();
+      if(!rd.pending){
+        return rd.error||rd.result||'Done.';
+      }
+    }
+    return 'Tray did not respond in time.';
+  }catch(e){
+    return 'Computer control unavailable.';
+  }
+}
 function toggleWake(){wakeOn=!wakeOn;var btn=document.getElementById('wakeBtn');if(wakeOn){btn.textContent='DISABLE';btn.style.cssText='width:100%;padding:5px;border-radius:4px;border:1px solid var(--gold);background:rgba(201,168,76,.1);color:var(--gold);font-size:9px;font-family:monospace;cursor:pointer;letter-spacing:.1em';startWake();}else{btn.textContent='ENABLE';btn.style.cssText='width:100%;padding:5px;border-radius:4px;border:1px solid var(--golddim);background:transparent;color:var(--golddim);font-size:9px;font-family:monospace;cursor:pointer;letter-spacing:.1em';stopWake();}}
 function startWake(){var SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR)return;function loop(){if(!wakeOn)return;var r=new SR();r.continuous=false;r.interimResults=true;r.lang='en-US';wakeRec=r;r.onresult=function(e){var t=Array.from(e.results).map(function(x){return x[0].transcript}).join('').toLowerCase().trim();if(t==='hey ava'||t==='ok ava'||t.startsWith('hey ava ')||t.startsWith('ok ava ')){r.stop();wakeRec=null;onWake();}};r.onend=function(){if(wakeOn&&!listening)setTimeout(loop,400);};r.onerror=function(){if(wakeOn&&!listening)setTimeout(loop,1200);};try{r.start();}catch(e){}}loop();}
 function stopWake(){if(wakeRec){try{wakeRec.stop();}catch(e){}wakeRec=null;}}
