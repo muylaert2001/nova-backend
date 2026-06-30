@@ -132,4 +132,22 @@ router.post('/search-play', async (req, res) => {
   }
 });
 
+router.post('/playlist-play', async (req, res) => {
+  if (!req.session.spotifyTokens) return res.status(401).json({ error: 'Not connected to Spotify' });
+  const { query } = req.body;
+  try {
+    const api = await refreshIfNeeded(req);
+    const results = await api.searchPlaylists(query, { limit: 1 });
+    const playlist = results.body.playlists.items[0];
+    if (!playlist) return res.json({ success: false, message: 'No playlist found' });
+    const devices = await api.getMyDevices();
+    const activeDevice = devices.body.devices.find(d => d.is_active) || devices.body.devices[0];
+    if (!activeDevice) return res.json({ success: false, message: 'No Spotify device found. Please open Spotify on a device first.' });
+    await api.play({ context_uri: playlist.uri, device_id: activeDevice.id });
+    res.json({ success: true, playlist: playlist.name, owner: playlist.owner.display_name });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

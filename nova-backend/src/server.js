@@ -248,6 +248,20 @@ app.post('/api/transcribe', upload.single('audio'), async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const crypto = require('crypto');
+
+// Prevent unhandled Redis TimeoutErrors from crashing the process
+process.on('unhandledRejection', (err) => {
+  if (err && err.name === 'TimeoutError') return;
+  console.error('[server] Unhandled rejection:', err);
+});
+
+
+// Prevent unhandled Redis timeouts from crashing the process
+process.on('unhandledRejection', (err) => {
+  if (err && err.name === 'TimeoutError') return; // ignore Redis brPop timeouts
+  console.error('[server] Unhandled rejection:', err);
+});
+
 const r = redisClient; // matches your existing variable name
 
 // ── Auth: all tray-facing endpoints verify this token ──
