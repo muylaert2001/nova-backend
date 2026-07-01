@@ -19,7 +19,7 @@ const PORT = process.env.PORT || 3001;
 
 // ── Middleware ──
 app.use(express.static(require('path').join(__dirname, '../public')));
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 app.use(cors({
   origin: [process.env.FRONTEND_URL || 'https://claude.ai', 'http://localhost:3000'],
   credentials: true

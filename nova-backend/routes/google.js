@@ -90,7 +90,8 @@ router.get('/calendar', async (req, res) => {
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
     const result = await calendar.events.list({
       calendarId: 'primary', timeMin: new Date().toISOString(),
-      maxResults: 10, singleEvents: true, orderBy: 'startTime'
+      timeMax: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      maxResults: 20, singleEvents: true, orderBy: 'startTime'
     });
     const events = result.data.items.map(e => ({
       id: e.id, title: e.summary,
