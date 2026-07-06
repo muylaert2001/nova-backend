@@ -118,6 +118,19 @@ app.post('/api/memory/:key', async (req, res) => {
 
 app.post('/api/chat', async (req, res) => {
   try {
+    const body = { ...req.body };
+    const messages = body.messages || [];
+    const lastMsg = messages[messages.length - 1];
+    const hasImage = Array.isArray(lastMsg?.content) && lastMsg.content.some(b => b.type === 'image');
+    const text = Array.isArray(lastMsg?.content) ? lastMsg.content.filter(b => b.type === 'text').map(b => b.text).join(' ') : (lastMsg?.content || '');
+    const simpleKeywords = ['open ','play ','remind','what time','how are you','hello','hi ','hey ','thanks','good morning','good night','pause','stop','volume','mute','screenshot'];
+    const isSimple = !hasImage && text.length < 120 && simpleKeywords.some(k => text.toLowerCase().includes(k));
+    if (isSimple && body.model === 'claude-sonnet-4-6') {
+      body.model = 'claude-haiku-4-5-20251001';
+      console.log('[chat] Haiku:', text.substring(0, 50));
+    } else {
+      console.log('[chat] Sonnet:', text.substring(0, 50));
+    }
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -125,7 +138,7 @@ app.post('/api/chat', async (req, res) => {
         'x-api-key': process.env.ANTHROPIC_API_KEY,
         'anthropic-version': '2023-06-01'
       },
-      body: JSON.stringify(req.body)
+      body: JSON.stringify(body)
     });
     const data = await response.json();
     res.json(data);
@@ -656,6 +669,32 @@ app.post('/api/tts', async (req, res) => {
   }
 });
 
+
+
+// ── Vision Events (OpenCV bridge) ──
+app.post('/api/vision/event', async (req, res) => {
+  try {
+    const { event, data } = req.body;
+    const payload = JSON.stringify({ event, data, timestamp: Date.now() });
+    await redisClient.set('vision:latest_event', payload, { EX: 300 });
+    await redisClient.lPush('vision:events', payload);
+    await redisClient.lTrim('vision:events', 0, 49); // keep last 50
+    console.log('[vision] Event received:', event);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[vision] Error:', e);
+    res.status(500).json({ error: e.message, stack: e.stack });
+  }
+});
+
+app.get('/api/vision/event', async (req, res) => {
+  try {
+    const raw = await redisClient.get('vision:latest_event');
+    res.json(raw ? JSON.parse(raw) : { event: null });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`\n🟣 NOVA Backend running on port ${PORT}`);
