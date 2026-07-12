@@ -20,7 +20,12 @@ const PORT = process.env.PORT || 3001;
 
 // ── Middleware ──
 app.use(express.static(require('path').join(__dirname, '../public')));
-app.use(express.json({ limit: '50mb' }));
+app.use((req, res, next) => {
+  if (req.headers['content-type'] && req.headers['content-type'].includes('multipart/form-data')) {
+    return next();
+  }
+  express.json({ limit: '50mb' })(req, res, next);
+});
 app.use(cors({
   origin: [process.env.FRONTEND_URL || 'https://claude.ai', 'http://localhost:3000'],
   credentials: true
@@ -232,7 +237,6 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 app.post('/api/transcribe', upload.single('audio'), async (req, res) => {
   try {
-    const axios = require('axios');
     const FormData = require('form-data');
     const form = new FormData();
     form.append('file', req.file.buffer, { filename: 'audio.webm', contentType: req.file.mimetype });
@@ -503,7 +507,7 @@ const ffmpeg = require('fluent-ffmpeg');
 
 const videoUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 30 * 1024 * 1024 }, // 30MB
+  limits: { fileSize: 100 * 1024 * 1024 }, // 30MB
   fileFilter: (req, file, cb) => {
     const allowed = ['video/mp4', 'video/webm', 'video/quicktime'];
     if (allowed.includes(file.mimetype)) cb(null, true);
@@ -538,7 +542,9 @@ function extractFrame(filePath, timestampSeconds, outputPath) {
 }
 
 app.post('/api/analyze-video', (req, res, next) => {
+  console.log('[video] Content-Type:', req.headers['content-type']);
   videoUpload.single('video')(req, res, (err) => {
+    console.log('[video] multer err:', err, 'file:', req.file?.originalname);
     if (err) return res.status(400).json({ error: err.message || 'Invalid video upload.' });
     next();
   });
@@ -550,6 +556,7 @@ app.post('/api/analyze-video', (req, res, next) => {
     return res.status(500).json({ error: 'OpenAI API key not configured on server.' });
   }
 
+  console.log('[video] File received:', req.file?.originalname, req.file?.size, req.file?.mimetype);
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ava-video-'));
   const videoPath = path.join(tmpDir, `input${path.extname(req.file.originalname) || '.mp4'}`);
 
