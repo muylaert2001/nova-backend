@@ -704,6 +704,36 @@ app.get('/api/vision/event', async (req, res) => {
   }
 });
 
+
+// Auto-summarize old conversation history
+app.post('/api/summarize', async (req, res) => {
+  try {
+    const { messages } = req.body;
+    if (!messages || !messages.length) return res.json({ summary: '' });
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 500,
+        messages: [{
+          role: 'user',
+          content: 'Summarize this conversation in 3-4 sentences, focusing on important facts, decisions, and emotional moments that should be remembered:\n\n' +
+            messages.map(m => m.role + ': ' + (typeof m.content === 'string' ? m.content : '[image/file]')).join('\n')
+        }]
+      })
+    });
+    const data = await response.json();
+    const summary = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('') || '';
+    res.json({ summary });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 app.listen(PORT, () => {
   console.log(`\n🟣 NOVA Backend running on port ${PORT}`);
   console.log(`   Health check: http://localhost:${PORT}/`);
