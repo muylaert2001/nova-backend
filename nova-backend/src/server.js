@@ -1,4 +1,7 @@
 require('dotenv').config();
+const { Pool } = require('pg');
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+pool.connect().then(() => console.log('[db] PostgreSQL connected')).catch(e => console.error('[db] PostgreSQL connection error:', e.message));
 const axios = require('axios');
 const express = require('express');
 const session = require('express-session');
