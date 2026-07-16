@@ -158,12 +158,7 @@ app.post('/api/chat', async (req, res) => {
       const sessionId = req.ip || 'unknown';
       logConversation(sessionId, text, loggedReply).catch(()=>{});
     }
-    // Background logging - after response sent, never blocks
-    const reply = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
-    if (text && reply) {
-      const sessionId = req.headers['x-session-id'] || req.ip || 'unknown';
-      logConversation(sessionId, text, reply).catch(()=>{});
-    }
+
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
