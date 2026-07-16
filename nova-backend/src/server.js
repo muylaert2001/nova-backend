@@ -737,6 +737,38 @@ app.post('/api/summarize', async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
+// ── PostgreSQL Memory Routes ──
+app.post('/api/db/memory', async (req, res) => {
+  try {
+    const { memory_type, content, summary, importance, confidence, source_type, affects_identity } = req.body;
+    const result = await pool.query(
+      `INSERT INTO memories (memory_type, content, summary, importance, confidence, source_type, affects_identity)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, created_at`,
+      [memory_type, content, summary || null, importance || 0.5, confidence || 1.0, source_type, affects_identity || false]
+    );
+    console.log('[db] Memory saved:', result.rows[0].id);
+    res.json({ success: true, id: result.rows[0].id });
+  } catch (e) {
+    console.error('[db] Memory save error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/db/memories', async (req, res) => {
+  try {
+    const { type, limit } = req.query;
+    let query = 'SELECT * FROM memories WHERE status = $1';
+    let params = ['active'];
+    if (type) { query += ' AND memory_type = $2'; params.push(type); }
+    query += ' ORDER BY importance DESC, created_at DESC LIMIT $' + (params.length + 1);
+    params.push(limit || 20);
+    const result = await pool.query(query, params);
+    res.json({ memories: result.rows });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 app.listen(PORT, () => {
   console.log(`\n🟣 NOVA Backend running on port ${PORT}`);
   console.log(`   Health check: http://localhost:${PORT}/`);
