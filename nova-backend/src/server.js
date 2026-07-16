@@ -152,6 +152,18 @@ app.post('/api/chat', async (req, res) => {
     });
     const data = await response.json();
     res.json(data);
+    // Background logging - fires after response, never blocks chat
+    const loggedReply = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
+    if (text && loggedReply) {
+      const sessionId = req.ip || 'unknown';
+      logConversation(sessionId, text, loggedReply).catch(()=>{});
+    }
+    // Background logging - after response sent, never blocks
+    const reply = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
+    if (text && reply) {
+      const sessionId = req.headers['x-session-id'] || req.ip || 'unknown';
+      logConversation(sessionId, text, reply).catch(()=>{});
+    }
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -787,6 +799,40 @@ app.get('/api/db/memories', async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
+// Background conversation logger - fires after response, never blocks chat
+async function logConversation(sessionId, userText, assistantReply) {
+  try {
+    // Get or create conversation for this session
+    let convRes = await pool.query(
+      "SELECT id FROM conversations WHERE session_id=$1 ORDER BY started_at DESC LIMIT 1",
+      [sessionId]
+    );
+    let convId;
+    if (convRes.rows.length === 0) {
+      const newConv = await pool.query(
+        "INSERT INTO conversations (session_id, source) VALUES ($1, 'web_ui') RETURNING id",
+        [sessionId]
+      );
+      convId = newConv.rows[0].id;
+    } else {
+      convId = convRes.rows[0].id;
+    }
+    // Log user message
+    await pool.query(
+      "INSERT INTO messages (conversation_id, role, content) VALUES ($1, 'user', $2)",
+      [convId, userText]
+    );
+    // Log assistant reply
+    await pool.query(
+      "INSERT INTO messages (conversation_id, role, content) VALUES ($1, 'assistant', $2)",
+      [convId, assistantReply]
+    );
+    console.log('[db] Conversation logged:', convId);
+  } catch(e) {
+    console.error('[db] Logging error:', e.message);
+  }
+}
 app.listen(PORT, () => {
   console.log(`\n🟣 NOVA Backend running on port ${PORT}`);
   console.log(`   Health check: http://localhost:${PORT}/`);
