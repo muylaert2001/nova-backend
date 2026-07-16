@@ -828,6 +828,26 @@ async function logConversation(sessionId, userText, assistantReply) {
     console.error('[db] Logging error:', e.message);
   }
 }
+
+// Search past conversations
+app.get('/api/db/search', async (req, res) => {
+  try {
+    const { q, limit } = req.query;
+    if (!q) return res.json({ messages: [] });
+    const result = await pool.query(
+      `SELECT m.role, m.content, m.created_at, c.session_id
+       FROM messages m
+       JOIN conversations c ON m.conversation_id = c.id
+       WHERE m.content ILIKE $1
+       ORDER BY m.created_at DESC
+       LIMIT $2`,
+      ['%' + q + '%', limit || 10]
+    );
+    res.json({ messages: result.rows });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 app.listen(PORT, () => {
   console.log(`\n🟣 NOVA Backend running on port ${PORT}`);
   console.log(`   Health check: http://localhost:${PORT}/`);
