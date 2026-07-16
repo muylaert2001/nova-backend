@@ -140,6 +140,7 @@ app.post('/api/chat', async (req, res) => {
     } else {
       console.log('[chat] Sonnet:', text.substring(0, 50));
     }
+    const dbMems = await loadDatabaseMemories();
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -737,6 +738,23 @@ app.post('/api/summarize', async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
+// ── Load memories for chat context ──
+async function loadDatabaseMemories() {
+  try {
+    const result = await pool.query(
+      "SELECT content, memory_type, source_type, confidence FROM memories WHERE status = 'active' ORDER BY importance DESC LIMIT 10"
+    );
+    if (!result.rows.length) return '';
+    const lines = result.rows.map(r =>
+      '[' + r.memory_type + ' / ' + r.source_type + ' / confidence:' + r.confidence + '] ' + r.content
+    );
+    return '\n\nRetrieved memories:\n' + lines.join('\n');
+  } catch(e) {
+    console.error('[db] Memory load error:', e.message);
+    return '';
+  }
+}
 
 // ── PostgreSQL Memory Routes ──
 app.post('/api/db/memory', async (req, res) => {
