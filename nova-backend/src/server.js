@@ -848,6 +848,44 @@ app.get('/api/db/search', async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
+// Promote important messages to structured memories
+app.post('/api/db/promote', async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT id, role, content, created_at FROM messages ORDER BY created_at DESC LIMIT 20"
+    );
+    if (!result.rows.length) return res.json({ promoted: 0 });
+    const transcript = result.rows.reverse().map(r =>
+      r.role + ': ' + r.content.substring(0, 200)
+    ).join('\n');
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 500,
+        messages: [{ role: 'user', content: 'Extract up to 3 important facts from this conversation worth remembering long term. Return JSON array only, each item has: memory_type (semantic/episodic/relationship), content (one sentence), importance (0-1). Conversation:\n' + transcript }]
+      })
+    });
+    const data = await response.json();
+    const text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
+    const clean = text.replace(/```json|```/g,'').trim();
+    const facts = JSON.parse(clean);
+    let promoted = 0;
+    for (const fact of facts) {
+      await pool.query(
+        "INSERT INTO memories (memory_type, content, importance, confidence, source_type) VALUES ($1, $2, $3, 0.8, 'conversation_analysis')",
+        [fact.memory_type, fact.content, fact.importance]
+      );
+      promoted++;
+    }
+    res.json({ promoted, facts });
+  } catch(e) {
+    console.error('[db] promote error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
 app.listen(PORT, () => {
   console.log(`\n🟣 NOVA Backend running on port ${PORT}`);
   console.log(`   Health check: http://localhost:${PORT}/`);
