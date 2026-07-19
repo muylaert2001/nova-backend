@@ -886,6 +886,49 @@ app.post('/api/db/promote', async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
+// /api/context - read-only context retrieval endpoint
+app.post('/api/context', async (req, res) => {
+  try {
+    const { message, token_budget } = req.body;
+    const budget = token_budget || 850;
+    const result = { identity: '', core_facts: '', episodic_memories: [], estimated_tokens: 0 };
+
+    // Always load core facts
+    const coreRaw = await redisClient.get('ava:core');
+    result.core_facts = coreRaw || '';
+
+    // Decide if retrieval is needed
+    const skipWords = ['hey','hi','thanks','okay','ok','yes','no','open','play','stop','pause'];
+    const words = message.toLowerCase().split(' ');
+    const isSimple = message.length < 15 || words.every(w => skipWords.includes(w));
+
+    if (!isSimple) {
+      // Search past conversations
+      const searchWord = words.find(w => w.length > 4) || words[0];
+      const msgResult = await pool.query(
+        "SELECT role, content, created_at FROM messages WHERE content ILIKE $1 ORDER BY created_at DESC LIMIT 5",
+        ['%' + searchWord + '%']
+      );
+      result.episodic_memories = msgResult.rows.map(r => ({
+        role: r.role,
+        content: r.content.substring(0, 200),
+        date: r.created_at,
+        source: 'conversation_log'
+      }));
+    }
+
+    // Estimate tokens
+    result.estimated_tokens = Math.round(
+      (result.core_facts.length + result.episodic_memories.reduce((a,m) => a + m.content.length, 0)) / 4
+    );
+
+    res.json(result);
+  } catch(e) {
+    console.error('[context] error:', e.message);
+    res.json({ identity: '', core_facts: '', episodic_memories: [], estimated_tokens: 0 });
+  }
+});
 app.listen(PORT, () => {
   console.log(`\n🟣 NOVA Backend running on port ${PORT}`);
   console.log(`   Health check: http://localhost:${PORT}/`);
