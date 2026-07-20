@@ -140,6 +140,19 @@ app.post('/api/chat', async (req, res) => {
     } else {
       console.log('[chat] Sonnet:', text.substring(0, 50));
     }
+    // Load context from /api/context endpoint
+    let contextBlock = '';
+    try {
+      const ctxRes = await fetch('http://localhost:3001/api/context', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({message: text, token_budget: 850})
+      });
+      const ctxData = await ctxRes.json();
+      if (ctxData.episodic_memories && ctxData.episodic_memories.length) {
+        contextBlock = '\n\nRetrieved context:\n' + ctxData.episodic_memories.map(m => m.content).join('\n');
+      }
+    } catch(e) { console.error('[context] load error:', e.message); }
     const dbMems = await loadDatabaseMemories();
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
