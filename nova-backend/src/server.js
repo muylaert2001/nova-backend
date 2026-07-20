@@ -157,6 +157,17 @@ app.post('/api/chat', async (req, res) => {
     if (text && loggedReply) {
       const sessionId = req.ip || 'unknown';
       logConversation(sessionId, text, loggedReply).catch(()=>{});
+      // Shadow mode - log what /api/context would have retrieved
+      fetch('http://localhost:3001/api/context', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({message: text, token_budget: 850})
+      }).then(r => r.json()).then(ctx => {
+        console.log('[shadow] message:', text.substring(0,50));
+        console.log('[shadow] needs_retrieval:', ctx.episodic_memories?.length > 0);
+        console.log('[shadow] memories_count:', ctx.episodic_memories?.length || 0);
+        console.log('[shadow] tokens:', ctx.estimated_tokens);
+      }).catch(()=>{});
     }
 
   } catch (err) {
