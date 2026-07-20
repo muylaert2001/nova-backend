@@ -900,24 +900,43 @@ app.post('/api/context', async (req, res) => {
     const coreRaw = await redisClient.get('ava:core');
     result.core_facts = coreRaw || '';
 
-    // Decide if retrieval is needed
-    const skipWords = ['hey','hi','thanks','okay','ok','yes','no','open','play','stop','pause'];
-    const words = message.toLowerCase().split(' ');
-    const isSimple = message.length < 15 || words.every(w => skipWords.includes(w));
-
-    if (!isSimple) {
-      // Search past conversations
-      const searchWord = words.find(w => w.length > 4) || words[0];
-      const msgResult = await pool.query(
-        "SELECT role, content, created_at FROM messages WHERE content ILIKE $1 ORDER BY created_at DESC LIMIT 5",
-        ['%' + searchWord + '%']
-      );
-      result.episodic_memories = msgResult.rows.map(r => ({
-        role: r.role,
-        content: r.content.substring(0, 200),
-        date: r.created_at,
-        source: 'conversation_log'
-      }));
+    // Use deterministic classifier
+    if (classification.needs_retrieval) {
+      if (classification.intent === 'relationship' && classification.entities.people.length) {
+        const person = classification.entities.people[0];
+        const memResult = await pool.query(
+          "SELECT content, memory_type, importance FROM memories WHERE memory_type='relationship' AND content ILIKE $1 ORDER BY importance DESC LIMIT 3",
+          ['%' + person + '%']
+        );
+        result.episodic_memories = memResult.rows.map(r => ({
+          content: r.content.substring(0, 300),
+          type: r.memory_type,
+          source: 'relationship_memory'
+        }));
+      } else if (classification.intent === 'project' && classification.entities.projects.length) {
+        const project = classification.entities.projects[0];
+        const memResult = await pool.query(
+          "SELECT content, memory_type, importance FROM memories WHERE content ILIKE $1 ORDER BY importance DESC LIMIT 3",
+          ['%' + project + '%']
+        );
+        result.episodic_memories = memResult.rows.map(r => ({
+          content: r.content.substring(0, 300),
+          type: r.memory_type,
+          source: 'project_memory'
+        }));
+      } else {
+        const searchWord = message.split(' ').find(w => w.length > 4) || message.split(' ')[0];
+        const msgResult = await pool.query(
+          "SELECT role, content, created_at FROM messages WHERE content ILIKE $1 ORDER BY created_at DESC LIMIT 4",
+          ['%' + searchWord + '%']
+        );
+        result.episodic_memories = msgResult.rows.map(r => ({
+          role: r.role,
+          content: r.content.substring(0, 200),
+          date: r.created_at,
+          source: 'conversation_log'
+        }));
+      }
     }
 
     // Estimate tokens
