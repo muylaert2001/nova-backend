@@ -920,9 +920,20 @@ app.post('/api/context', async (req, res) => {
     const budget = token_budget || 850;
     const result = { identity: '', core_facts: '', episodic_memories: [], estimated_tokens: 0 };
 
+    // Load latest conversation handoff
+    try {
+      const handoffRes = await pool.query(
+        "SELECT content FROM memories WHERE source_type='conversation_handoff' ORDER BY created_at DESC LIMIT 1"
+      );
+      if (handoffRes.rows.length) {
+        const h = JSON.parse(handoffRes.rows[0].content);
+        result.core_facts += '\n\nLast session: Topic: ' + h.topic + '. Left off: ' + h.where_we_left_off + '. Next: ' + h.next_action;
+      }
+    } catch(e) {}
+
     // Always load core facts
     const coreRaw = await redisClient.get('ava:core');
-    result.core_facts = coreRaw || '';
+    result.core_facts = (coreRaw || '') + result.core_facts;
 
     // Use deterministic classifier
     if (classification.needs_retrieval) {
