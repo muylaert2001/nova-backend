@@ -891,6 +891,8 @@ app.post('/api/db/promote', async (req, res) => {
 app.post('/api/context', async (req, res) => {
   try {
     const { message, token_budget } = req.body;
+    const classification = classifyMessage(message);
+    console.log('[context] classification:', JSON.stringify(classification));
     const budget = token_budget || 850;
     const result = { identity: '', core_facts: '', episodic_memories: [], estimated_tokens: 0 };
 
@@ -929,6 +931,38 @@ app.post('/api/context', async (req, res) => {
     res.json({ identity: '', core_facts: '', episodic_memories: [], estimated_tokens: 0 });
   }
 });
+
+// Deterministic intent classifier - no model calls
+function classifyMessage(message) {
+  const msg = message.toLowerCase().trim();
+  const result = { needs_retrieval: false, intent: 'none', entities: { people: [], projects: [] }, matched_rules: [] };
+
+  // No retrieval cases
+  const skip = ['hey','hi','hello','thanks','thank you','okay','ok','yes','no','good morning','good night','bye'];
+  if (skip.includes(msg) || msg.length < 4) return result;
+
+  // Known people
+  const people = ['thom','jason','faith','deb','deborah','tom','thomas','kim','kimberly','jeff','beverly','ichigo','mao mao'];
+  people.forEach(p => { if (msg.includes(p)) { result.entities.people.push(p); result.matched_rules.push('person:'+p); }});
+
+  // Known projects
+  const projects = ['ava','postgresql','redis','vps','tray','github','memory','retrieval'];
+  projects.forEach(p => { if (msg.includes(p)) { result.entities.projects.push(p); result.matched_rules.push('project:'+p); }});
+
+  // Memory phrases
+  const memPhrases = ['remember','do you recall','last time','what did we decide','where did we leave off','previously','you told me','we talked about','what happened'];
+  memPhrases.forEach(p => { if (msg.includes(p)) result.matched_rules.push('memory_phrase:'+p); });
+
+  // Set retrieval needed
+  if (result.matched_rules.length > 0) {
+    result.needs_retrieval = true;
+    if (result.entities.people.length) result.intent = 'relationship';
+    else if (result.entities.projects.length) result.intent = 'project';
+    else result.intent = 'episodic';
+  }
+
+  return result;
+}
 app.listen(PORT, () => {
   console.log(`\n🟣 NOVA Backend running on port ${PORT}`);
   console.log(`   Health check: http://localhost:${PORT}/`);
