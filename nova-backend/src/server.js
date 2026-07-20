@@ -723,6 +723,37 @@ app.post('/api/vision/event', async (req, res) => {
     await redisClient.lPush('vision:events', payload);
     await redisClient.lTrim('vision:events', 0, 49); // keep last 50
     console.log('[vision] Event received:', event);
+    // Proactive greeting on arrival with cooldown
+    if (event === 'arrival') {
+      try {
+        const lastGreet = await redisClient.get('vision:last_greeting');
+        const now = Date.now();
+        const cooldown = 30 * 60 * 1000; // 30 minutes
+        if (!lastGreet || (now - parseInt(lastGreet)) > cooldown) {
+          await redisClient.set('vision:last_greeting', now.toString());
+          // Get handoff context
+          const handoffRes = await pool.query(
+            "SELECT content FROM memories WHERE source_type='conversation_handoff' ORDER BY created_at DESC LIMIT 1"
+          );
+          const handoff = handoffRes.rows.length ? JSON.parse(handoffRes.rows[0].content) : null;
+          const hour = new Date().getHours();
+          const timeOfDay = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
+          const prompt = 'You are AVA. Generate a short natural greeting (1-2 sentences max) for Thom who just arrived. Time: ' + timeOfDay + '. ' + (handoff ? 'Last session context: ' + handoff.where_we_left_off + '. Next planned: ' + handoff.next_action : '') + '. Be natural, warm, varied. No need to mention seeing him through the camera.';
+          const greetRes = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+            body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 100, messages: [{ role: 'user', content: prompt }] })
+          });
+          const greetData = await greetRes.json();
+          const greeting = (greetData.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
+          if (greeting) {
+            await redisClient.lPush('proactive:queue:thomas-desktop', greeting);
+            await redisClient.expire('proactive:queue:thomas-desktop', 120);
+            console.log('[vision] Proactive greeting queued:', greeting.substring(0, 50));
+          }
+        }
+      } catch(e) { console.error('[vision] greeting error:', e.message); }
+    }
     res.json({ ok: true });
   } catch (e) {
     console.error('[vision] Error:', e);
@@ -1041,6 +1072,21 @@ app.get('/api/db/handoff', async (req, res) => {
     res.json(result.rows[0] || null);
   } catch(e) {
     res.status(500).json({ error: e.message });
+  }
+});
+
+// Tray polls for proactive greeting
+app.get('/api/proactive', async (req, res) => {
+  try {
+    const greeting = await redisClient.get('ava:proactive_greeting');
+    if (greeting) {
+      await redisClient.del('ava:proactive_greeting');
+      res.json({ greeting });
+    } else {
+      res.json({ greeting: null });
+    }
+  } catch(e) {
+    res.json({ greeting: null });
   }
 });
 app.listen(PORT, () => {
