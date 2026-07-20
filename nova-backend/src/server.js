@@ -1006,6 +1006,32 @@ function classifyMessage(message) {
 
   return result;
 }
+
+// Save conversation handoff
+app.post('/api/db/handoff', async (req, res) => {
+  try {
+    const { topic, where_we_left_off, next_action, open_questions } = req.body;
+    await pool.query(
+      "INSERT INTO memories (memory_type, content, importance, confidence, source_type) VALUES ('episodic', $1, 0.95, 1.0, 'conversation_handoff')",
+      [JSON.stringify({ topic, where_we_left_off, next_action, open_questions, date: new Date().toISOString() })]
+    );
+    res.json({ success: true });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Get latest handoff
+app.get('/api/db/handoff', async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT content, created_at FROM memories WHERE source_type='conversation_handoff' ORDER BY created_at DESC LIMIT 1"
+    );
+    res.json(result.rows[0] || null);
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 app.listen(PORT, () => {
   console.log(`\n🟣 NOVA Backend running on port ${PORT}`);
   console.log(`   Health check: http://localhost:${PORT}/`);
