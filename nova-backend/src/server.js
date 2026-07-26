@@ -1085,6 +1085,36 @@ app.get('/api/proactive', async (req, res) => {
     res.json({ greeting: null });
   }
 });
+
+// Daily reflection journal
+app.post('/api/db/journal', async (req, res) => {
+  try {
+    const msgs = await pool.query(
+      "SELECT role, content FROM messages WHERE created_at > NOW() - INTERVAL '24 hours' ORDER BY created_at DESC LIMIT 30"
+    );
+    if (!msgs.rows.length) return res.json({ skipped: true });
+    const transcript = msgs.rows.reverse().map(r => r.role + ': ' + r.content.substring(0, 150)).join('\n');
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 200,
+        messages: [{ role: "user", content: "Summarize these conversation logs in 2-3 sentences. What topics came up and what was accomplished:\n\n" + transcript }]
+      })
+    });
+    const data = await response.json();
+    const entry = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
+    if (entry) {
+      await pool.query("INSERT INTO journal_entries (content, entry_type) VALUES ($1, 'daily')", [entry]);
+      console.log('[journal] Entry written:', entry.substring(0, 60));
+    }
+    res.json({ success: true, entry });
+  } catch(e) {
+    console.error('[journal] error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
 app.listen(PORT, () => {
   console.log(`\n🟣 NOVA Backend running on port ${PORT}`);
   console.log(`   Health check: http://localhost:${PORT}/`);
