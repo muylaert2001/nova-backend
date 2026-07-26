@@ -1115,6 +1115,58 @@ app.post('/api/db/journal', async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
+// Autonomous web search
+app.post('/api/db/search-autonomous', async (req, res) => {
+  try {
+    // Step 1: Generate topics from recent context
+    const recentMems = await pool.query(
+      "SELECT content FROM memories ORDER BY created_at DESC LIMIT 5"
+    );
+    const context = recentMems.rows.map(r => r.content).join('\n');
+    const topicRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 200,
+        messages: [{ role: 'user', content: 'Based on this context, suggest 3 search queries that would surface genuinely useful or interesting information. Return JSON array of strings only:\n\n' + context }]
+      })
+    });
+    const topicData = await topicRes.json();
+    const topicText = (topicData.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('').replace(/```json|```/g,'').trim();
+    const topics = JSON.parse(topicText);
+    
+    // Step 2: Search each topic using web search
+    const results = [];
+    for (const topic of topics.slice(0, 3)) {
+      const searchRes = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'anthropic-beta': 'interleaved-thinking-2025-05-14' },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 300,
+          tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+          messages: [{ role: 'user', content: 'Search for: ' + topic + '. Give a 2 sentence summary of what you find.' }]
+        })
+      });
+      const searchData = await searchRes.json();
+      const summary = (searchData.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
+      if (summary) {
+        await pool.query(
+          "INSERT INTO memories (memory_type, content, importance, confidence, source_type) VALUES ('semantic', $1, 0.6, 0.8, 'autonomous_search')",
+          ['Search: ' + topic + '\nFindings: ' + summary]
+        );
+        results.push({ topic, summary });
+        console.log('[search] Topic searched:', topic.substring(0, 50));
+      }
+    }
+    res.json({ success: true, searched: results.length, results });
+  } catch(e) {
+    console.error('[search] error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
 app.listen(PORT, () => {
   console.log(`\n🟣 NOVA Backend running on port ${PORT}`);
   console.log(`   Health check: http://localhost:${PORT}/`);
