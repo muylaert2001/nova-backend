@@ -1078,13 +1078,9 @@ app.get('/api/db/handoff', async (req, res) => {
 // Tray polls for proactive greeting
 app.get('/api/proactive', async (req, res) => {
   try {
-    const greeting = await redisClient.get('ava:proactive_greeting');
-    if (greeting) {
-      await redisClient.del('ava:proactive_greeting');
-      res.json({ greeting });
-    } else {
-      res.json({ greeting: null });
-    }
+    const deviceId = req.headers['x-device-id'] || 'thomas-desktop';
+    const greeting = await redisClient.rPop('proactive:queue:' + deviceId);
+    res.json({ greeting: greeting || null });
   } catch(e) {
     res.json({ greeting: null });
   }
