@@ -153,6 +153,7 @@ app.post('/api/chat', async (req, res) => {
         contextBlock = '\n\nRetrieved context:\n' + ctxData.episodic_memories.map(m => m.content).join('\n');
       }
     } catch(e) { console.error('[context] load error:', e.message); }
+    if (contextBlock && body.system) { body.system += contextBlock; }
     const dbMems = await loadDatabaseMemories();
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -992,6 +993,18 @@ app.post('/api/context', async (req, res) => {
         }));
       } else {
         const searchWord = message.split(' ').find(w => w.length > 4) || message.split(' ')[0];
+        // Check if asking about autonomous searches
+        const isSearchQuery = message.toLowerCase().includes('search') || message.toLowerCase().includes('research') || message.toLowerCase().includes('look up');
+        if (isSearchQuery) {
+          const searchResult = await pool.query(
+            "SELECT content, created_at FROM memories WHERE source_type='autonomous_search' ORDER BY created_at DESC LIMIT 5"
+          );
+          result.episodic_memories = searchResult.rows.map(r => ({
+            content: r.content.substring(0, 300),
+            date: r.created_at,
+            source: 'autonomous_search'
+          }));
+        } else {
         const msgResult = await pool.query(
           "SELECT role, content, created_at FROM messages WHERE content ILIKE $1 ORDER BY created_at DESC LIMIT 4",
           ['%' + searchWord + '%']
@@ -1002,6 +1015,7 @@ app.post('/api/context', async (req, res) => {
           date: r.created_at,
           source: 'conversation_log'
         }));
+        }
       }
     }
 
@@ -1035,7 +1049,7 @@ function classifyMessage(message) {
   projects.forEach(p => { if (msg.includes(p)) { result.entities.projects.push(p); result.matched_rules.push('project:'+p); }});
 
   // Memory phrases
-  const memPhrases = ['remember','do you recall','last time','what did we decide','where did we leave off','previously','you told me','we talked about','what happened'];
+  const memPhrases = ['remember','do you recall','last time','what did we decide','where did we leave off','previously','you told me','we talked about','what happened','what did you search','what have you researched','what did you find','did you look up','autonomous search'];
   memPhrases.forEach(p => { if (msg.includes(p)) result.matched_rules.push('memory_phrase:'+p); });
 
   // Set retrieval needed
