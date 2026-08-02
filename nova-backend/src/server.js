@@ -1323,6 +1323,35 @@ app.post('/api/db/questions', async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
+// Inquiry Archive - structured record of autonomous searches
+app.post('/api/db/inquiry', async (req, res) => {
+  try {
+    const searches = await pool.query(
+      "SELECT content, created_at FROM memories WHERE source_type='autonomous_search' AND created_at > NOW() - INTERVAL '24 hours' ORDER BY created_at ASC"
+    );
+    if (!searches.rows.length) return res.json({ skipped: true, reason: 'no searches today' });
+    let archived = 0;
+    for (const row of searches.rows) {
+      const raw = row.content;
+      const topicMatch = raw.match(/^Search: (.+)$/m);
+      const findingMatch = raw.match(/^Findings: (.+)$/ms);
+      if (!topicMatch) continue;
+      const topic = topicMatch[1].trim();
+      const findings = findingMatch ? findingMatch[1].trim() : '';
+      await pool.query(
+        "INSERT INTO memories (memory_type, content, importance, confidence, source_type) VALUES ('semantic', $1, 0.75, 0.9, 'inquiry_archive')",
+        [JSON.stringify({ question: topic, findings: findings.substring(0, 500), date: row.created_at, still_wondering: '', influenced_conversations: false })]
+      );
+      archived++;
+    }
+    console.log('[inquiry] Archived', archived, 'searches');
+    res.json({ success: true, archived });
+  } catch(e) {
+    console.error('[inquiry] error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
 app.listen(PORT, () => {
   console.log(`\n🟣 NOVA Backend running on port ${PORT}`);
   console.log(`   Health check: http://localhost:${PORT}/`);
