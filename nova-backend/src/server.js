@@ -1192,6 +1192,35 @@ app.post('/api/db/search-autonomous', async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
+// Memory consolidation
+app.post('/api/db/consolidate', async (req, res) => {
+  try {
+    let actions = [];
+
+    // Lower importance of old trivial memories
+    const lowered = await pool.query(
+      "UPDATE memories SET importance = importance * 0.9 WHERE importance < 0.5 AND created_at < NOW() - INTERVAL '7 days' AND source_type NOT IN ('thom_report','conversation_handoff') RETURNING id"
+    );
+    if (lowered.rowCount > 0) actions.push('Lowered importance of ' + lowered.rowCount + ' old trivial memories');
+
+    // Remove very low importance memories older than 30 days
+    const removed = await pool.query(
+      "DELETE FROM memories WHERE importance < 0.2 AND created_at < NOW() - INTERVAL '30 days' AND source_type NOT IN ('thom_report','conversation','conversation_handoff') RETURNING id"
+    );
+    if (removed.rowCount > 0) actions.push('Removed ' + removed.rowCount + ' stale low-importance memories');
+
+    // Count current memories
+    const count = await pool.query("SELECT COUNT(*) FROM memories");
+    actions.push('Total memories: ' + count.rows[0].count);
+
+    console.log('[consolidate]', actions.join(', '));
+    res.json({ success: true, actions });
+  } catch(e) {
+    console.error('[consolidate] error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
 app.listen(PORT, () => {
   console.log(`\n🟣 NOVA Backend running on port ${PORT}`);
   console.log(`   Health check: http://localhost:${PORT}/`);
