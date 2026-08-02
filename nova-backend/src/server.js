@@ -1114,7 +1114,7 @@ app.post('/api/db/journal', async (req, res) => {
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 200,
-        messages: [{ role: "user", content: "Summarize these conversation logs in 2-3 sentences. What topics came up and what was accomplished:\n\n" + transcript }]
+        messages: [{ role: "user", content: "Read these conversation logs and produce a structured daily summary with these sections:\n1. What was accomplished today\n2. What was learned or discovered\n3. What projects advanced\n4. One notable question that came up\n5. Tomorrow priorities\n\nBe factual and specific. Use only what is in the logs.\n\n" + transcript }]
       })
     });
     const data = await response.json();
