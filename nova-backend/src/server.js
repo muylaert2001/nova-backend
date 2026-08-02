@@ -1518,6 +1518,30 @@ app.post('/api/db/diagnostics', async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
+// Story Reinforcement - surface important unreferenced memories
+app.post('/api/db/reinforce', async (req, res) => {
+  try {
+    const old = await pool.query(
+      "SELECT id, content, source_type, created_at FROM memories WHERE importance > 0.7 AND source_type IN ('anchor_experience','conversation','thom_report') AND created_at < NOW() - INTERVAL '14 days' ORDER BY importance DESC, created_at ASC LIMIT 5"
+    );
+    if (!old.rows.length) return res.json({ skipped: true, reason: 'nothing to reinforce' });
+
+    const summaries = old.rows.map(r => {
+      try {
+        const parsed = JSON.parse(r.content);
+        return parsed.title || parsed.summary || r.content.substring(0, 150);
+      } catch(e) { return r.content.substring(0, 150); }
+    });
+
+    await redisClient.set('ava:reinforcement', JSON.stringify(summaries), { EX: 86400 });
+    console.log('[reinforce] Flagged', summaries.length, 'memories for reinforcement');
+    res.json({ success: true, reinforced: summaries.length, summaries });
+  } catch(e) {
+    console.error('[reinforce] error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
 app.listen(PORT, () => {
   console.log(`\n🟣 NOVA Backend running on port ${PORT}`);
   console.log(`   Health check: http://localhost:${PORT}/`);
