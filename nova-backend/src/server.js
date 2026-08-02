@@ -1352,6 +1352,59 @@ app.post('/api/db/inquiry', async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
+// Wake Preparation - morning briefing
+app.post('/api/db/wake-prep', async (req, res) => {
+  try {
+    const parts = [];
+
+    // Recent journal
+    const journal = await pool.query(
+      "SELECT content FROM journal_entries WHERE entry_type='daily' ORDER BY created_at DESC LIMIT 1"
+    );
+    if (journal.rows.length) parts.push('Yesterday: ' + journal.rows[0].content.substring(0, 300));
+
+    // Recent anchor experiences
+    const anchors = await pool.query(
+      "SELECT content FROM memories WHERE source_type='anchor_experience' ORDER BY created_at DESC LIMIT 2"
+    );
+    for (const row of anchors.rows) {
+      try {
+        const a = JSON.parse(row.content);
+        parts.push('Anchor: ' + a.title + ' - ' + a.summary.substring(0, 150));
+      } catch(e) {}
+    }
+
+    // Latest question
+    const question = await pool.query(
+      "SELECT content FROM journal_entries WHERE entry_type='question' ORDER BY created_at DESC LIMIT 1"
+    );
+    if (question.rows.length) {
+      try {
+        const q = JSON.parse(question.rows[0].content);
+        parts.push('Open question: ' + q.question);
+      } catch(e) {}
+    }
+
+    // Recent searches
+    const searches = await pool.query(
+      "SELECT content FROM memories WHERE source_type='autonomous_search' ORDER BY created_at DESC LIMIT 3"
+    );
+    const topics = searches.rows.map(r => {
+      const m = r.content.match(/^Search: (.+)$/m);
+      return m ? m[1].trim() : null;
+    }).filter(Boolean);
+    if (topics.length) parts.push('Recent research: ' + topics.join(', '));
+
+    const briefing = parts.join('\n\n');
+    await redisClient.set('ava:wake_briefing', briefing, { EX: 86400 });
+    console.log('[wake] Briefing prepared, length:', briefing.length);
+    res.json({ success: true, briefing });
+  } catch(e) {
+    console.error('[wake] error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
 app.listen(PORT, () => {
   console.log(`\n🟣 NOVA Backend running on port ${PORT}`);
   console.log(`   Health check: http://localhost:${PORT}/`);
