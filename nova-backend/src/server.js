@@ -1175,6 +1175,17 @@ app.post('/api/db/search-autonomous', async (req, res) => {
         console.log('[search] Topic searched:', topic.substring(0, 50));
       }
     }
+    // Update handoff with search summary
+    if (results.length) {
+      const topicList = results.map(r => r.topic).join(', ');
+      await pool.query(
+        "INSERT INTO memories (memory_type, content, importance, confidence, source_type) VALUES ('episodic', $1, 0.8, 1.0, 'conversation_handoff')",
+        [JSON.stringify({ topic: 'Morning autonomous search', where_we_left_off: 'Autonomous search ran at 5am. Topics searched: ' + topicList, next_action: 'Review search findings if relevant', open_questions: [], date: new Date().toISOString() })]
+      );
+      console.log('[search] Handoff updated with search summary');
+    } else {
+      console.log('[search] No results to save to handoff');
+    }
     res.json({ success: true, searched: results.length, results });
   } catch(e) {
     console.error('[search] error:', e.message);
