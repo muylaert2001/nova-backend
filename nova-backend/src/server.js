@@ -1221,6 +1221,42 @@ app.post('/api/db/consolidate', async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
+// Anchor experience detection
+app.post('/api/db/anchors', async (req, res) => {
+  try {
+    const msgs = await pool.query(
+      "SELECT role, content, created_at FROM messages WHERE created_at > NOW() - INTERVAL '24 hours' ORDER BY created_at ASC LIMIT 40"
+    );
+    if (!msgs.rows.length) return res.json({ skipped: true });
+    const transcript = msgs.rows.map(r => r.role + ': ' + r.content.substring(0, 200)).join('\n');
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 400,
+        messages: [{ role: 'user', content: 'Read these conversation logs. Identify up to 2 genuinely significant events - major decisions made, important milestones reached, or meaningful breakthroughs. Return JSON array only, each item has: title, summary, why_it_matters, affected_topics (array). Only include events that would meaningfully affect future context. Return empty array if nothing qualifies.\n\n' + transcript }]
+      })
+    });
+    const data = await response.json();
+    const text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('').replace(/```json|```/g,'').trim();
+    const anchors = JSON.parse(text);
+    let saved = 0;
+    for (const anchor of anchors) {
+      await pool.query(
+        "INSERT INTO memories (memory_type, content, importance, confidence, source_type) VALUES ('episodic', $1, 1.0, 0.9, 'anchor_experience')",
+        [JSON.stringify({ title: anchor.title, summary: anchor.summary, why_it_matters: anchor.why_it_matters, affected_topics: anchor.affected_topics, date: new Date().toISOString() })]
+      );
+      saved++;
+      console.log('[anchors] Saved:', anchor.title);
+    }
+    res.json({ success: true, anchors_found: anchors.length, saved });
+  } catch(e) {
+    console.error('[anchors] error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
 app.listen(PORT, () => {
   console.log(`\n🟣 NOVA Backend running on port ${PORT}`);
   console.log(`   Health check: http://localhost:${PORT}/`);
