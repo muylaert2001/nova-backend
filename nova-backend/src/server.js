@@ -1405,6 +1405,58 @@ app.post('/api/db/wake-prep', async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
+// Pattern Recognition
+app.post('/api/db/patterns', async (req, res) => {
+  try {
+    const questions = await pool.query(
+      "SELECT content, created_at FROM journal_entries WHERE entry_type='question' ORDER BY created_at DESC LIMIT 10"
+    );
+    const anchors = await pool.query(
+      "SELECT content, created_at FROM memories WHERE source_type='anchor_experience' ORDER BY created_at DESC LIMIT 5"
+    );
+    const searches = await pool.query(
+      "SELECT content FROM memories WHERE source_type='autonomous_search' ORDER BY created_at DESC LIMIT 10"
+    );
+
+    if (!questions.rows.length && !anchors.rows.length) return res.json({ skipped: true });
+
+    const questionList = questions.rows.map(r => {
+      try { return JSON.parse(r.content).question; } catch(e) { return r.content.substring(0, 150); }
+    }).join('\n');
+
+    const anchorList = anchors.rows.map(r => {
+      try { const a = JSON.parse(r.content); return a.title + ': ' + a.summary.substring(0, 100); } catch(e) { return r.content.substring(0, 150); }
+    }).join('\n');
+
+    const searchTopics = searches.rows.map(r => {
+      const m = r.content.match(/^Search: (.+)$/m);
+      return m ? m[1].trim() : null;
+    }).filter(Boolean).join('\n');
+
+    const prompt = 'Review these questions, anchor experiences, and search topics. Identify 2-3 recurring patterns or themes. Return JSON only: {"patterns": [{"theme": "", "evidence": "", "new": true/false}], "connections": ""}\n\nQuestions:\n' + questionList + '\n\nAnchors:\n' + anchorList + '\n\nSearch topics:\n' + searchTopics;
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 400, messages: [{ role: 'user', content: prompt }] })
+    });
+    const data = await response.json();
+    const text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('').replace(/```json|```/g,'').trim();
+    const result = JSON.parse(text);
+
+    await pool.query(
+      "INSERT INTO memories (memory_type, content, importance, confidence, source_type) VALUES ('semantic', $1, 0.8, 0.8, 'pattern_recognition')",
+      [JSON.stringify({ date: new Date().toISOString(), patterns: result.patterns, connections: result.connections })]
+    );
+
+    console.log('[patterns] Identified', result.patterns.length, 'patterns');
+    res.json({ success: true, result });
+  } catch(e) {
+    console.error('[patterns] error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
 app.listen(PORT, () => {
   console.log(`\n🟣 NOVA Backend running on port ${PORT}`);
   console.log(`   Health check: http://localhost:${PORT}/`);
