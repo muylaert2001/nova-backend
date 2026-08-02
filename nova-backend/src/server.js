@@ -1292,6 +1292,37 @@ app.post('/api/db/consistency', async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
+// Questions Journal - one generated question per night
+app.post('/api/db/questions', async (req, res) => {
+  try {
+    const recentMems = await pool.query(
+      "SELECT content FROM memories ORDER BY created_at DESC LIMIT 10"
+    );
+    const context = recentMems.rows.map(r => r.content.substring(0, 150)).join('\n');
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 200,
+        messages: [{ role: "user", content: "Generate one unanswered question from this context. Return ONLY valid JSON: {\"question\": \"\", \"why_asked\": \"\", \"related_topics\": []}\n\n" + context }]
+      })
+    });
+    const data = await response.json();
+    const text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('').replace(/```json|```/g,'').trim();
+    const result = JSON.parse(text);
+    await pool.query(
+      "INSERT INTO journal_entries (content, entry_type) VALUES ($1, 'question')",
+      [JSON.stringify({ question: result.question, why_asked: result.why_asked, related_topics: result.related_topics, date: new Date().toISOString() })]
+    );
+    console.log('[questions] Generated:', result.question.substring(0, 80));
+    res.json({ success: true, result });
+  } catch(e) {
+    console.error('[questions] error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
 app.listen(PORT, () => {
   console.log(`\n🟣 NOVA Backend running on port ${PORT}`);
   console.log(`   Health check: http://localhost:${PORT}/`);
