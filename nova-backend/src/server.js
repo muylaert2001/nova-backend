@@ -1457,6 +1457,67 @@ app.post('/api/db/patterns', async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
+// Diagnostics - nightly health check
+app.post('/api/db/diagnostics', async (req, res) => {
+  try {
+    const report = { timestamp: new Date().toISOString(), checks: [], passed: true };
+
+    // Check PostgreSQL
+    try {
+      await pool.query("SELECT 1");
+      report.checks.push({ name: 'PostgreSQL', status: 'ok' });
+    } catch(e) {
+      report.checks.push({ name: 'PostgreSQL', status: 'fail', error: e.message });
+      report.passed = false;
+    }
+
+    // Check Redis
+    try {
+      await redisClient.set('diag:test', '1', { EX: 10 });
+      report.checks.push({ name: 'Redis', status: 'ok' });
+    } catch(e) {
+      report.checks.push({ name: 'Redis', status: 'fail', error: e.message });
+      report.passed = false;
+    }
+
+    // Check recent nightly jobs ran
+    const jobs = [
+      { name: 'journal', table: 'journal_entries', type_col: "entry_type='daily'" },
+      { name: 'questions', table: 'journal_entries', type_col: "entry_type='question'" },
+    ];
+    for (const job of jobs) {
+      const r = await pool.query(
+        "SELECT COUNT(*) FROM " + job.table + " WHERE " + job.type_col + " AND created_at > NOW() - INTERVAL '25 hours'"
+      );
+      const ran = parseInt(r.rows[0].count) > 0;
+      report.checks.push({ name: job.name, status: ran ? 'ok' : 'missing' });
+      if (!ran) report.passed = false;
+    }
+
+    // Check memory counts
+    const memCount = await pool.query("SELECT COUNT(*) FROM memories");
+    const msgCount = await pool.query("SELECT COUNT(*) FROM messages");
+    report.checks.push({ name: 'memories', count: parseInt(memCount.rows[0].count) });
+    report.checks.push({ name: 'messages', count: parseInt(msgCount.rows[0].count) });
+
+    // Check disk
+    const core = await redisClient.get('ava:core');
+    report.checks.push({ name: 'core_memory', status: core ? 'ok' : 'missing' });
+    if (!core) report.passed = false;
+
+    await pool.query(
+      "INSERT INTO memories (memory_type, content, importance, confidence, source_type) VALUES ('semantic', $1, 0.6, 1.0, 'diagnostics')",
+      [JSON.stringify(report)]
+    );
+
+    console.log('[diagnostics] Health check complete. Passed:', report.passed);
+    res.json({ success: true, report });
+  } catch(e) {
+    console.error('[diagnostics] error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
 app.listen(PORT, () => {
   console.log(`\n🟣 NOVA Backend running on port ${PORT}`);
   console.log(`   Health check: http://localhost:${PORT}/`);
