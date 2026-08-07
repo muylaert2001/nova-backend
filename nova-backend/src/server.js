@@ -913,7 +913,7 @@ app.post('/api/db/promote', async (req, res) => {
     );
     if (!result.rows.length) return res.json({ promoted: 0 });
     const transcript = result.rows.reverse().map(r =>
-      r.role + ': ' + r.content.substring(0, 200)
+      r.role + ': ' + r.content.substring(0, 500)
     ).join('\n');
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -1011,7 +1011,7 @@ app.post('/api/context', async (req, res) => {
         );
         result.episodic_memories = msgResult.rows.map(r => ({
           role: r.role,
-          content: r.content.substring(0, 200),
+          content: r.content.substring(0, 500),
           date: r.created_at,
           source: 'conversation_log'
         }));
@@ -1107,7 +1107,7 @@ app.post('/api/db/journal', async (req, res) => {
       "SELECT role, content FROM messages WHERE created_at > NOW() - INTERVAL '24 hours' ORDER BY created_at DESC LIMIT 30"
     );
     if (!msgs.rows.length) return res.json({ skipped: true });
-    const transcript = msgs.rows.reverse().map(r => r.role + ': ' + r.content.substring(0, 150)).join('\n');
+    const transcript = msgs.rows.reverse().map(r => r.role + ': ' + r.content.substring(0, 400)).join('\n');
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
@@ -1229,7 +1229,7 @@ app.post('/api/db/anchors', async (req, res) => {
       "SELECT role, content, created_at FROM messages WHERE created_at > NOW() - INTERVAL '24 hours' ORDER BY created_at ASC LIMIT 40"
     );
     if (!msgs.rows.length) return res.json({ skipped: true });
-    const transcript = msgs.rows.map(r => r.role + ': ' + r.content.substring(0, 200)).join('\n');
+    const transcript = msgs.rows.map(r => r.role + ': ' + r.content.substring(0, 500)).join('\n');
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
@@ -1266,7 +1266,7 @@ app.post('/api/db/consistency', async (req, res) => {
     );
     if (!recent.rows.length) return res.json({ skipped: true });
 
-    const responses = recent.rows.map(r => r.content.substring(0, 200)).join('\n---\n');
+    const responses = recent.rows.map(r => r.content.substring(0, 500)).join('\n---\n');
     const checkRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
@@ -1299,7 +1299,7 @@ app.post('/api/db/questions', async (req, res) => {
     const recentMems = await pool.query(
       "SELECT content FROM memories ORDER BY created_at DESC LIMIT 10"
     );
-    const context = recentMems.rows.map(r => r.content.substring(0, 150)).join('\n');
+    const context = recentMems.rows.map(r => r.content.substring(0, 400)).join('\n');
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
@@ -1422,11 +1422,11 @@ app.post('/api/db/patterns', async (req, res) => {
     if (!questions.rows.length && !anchors.rows.length) return res.json({ skipped: true });
 
     const questionList = questions.rows.map(r => {
-      try { return JSON.parse(r.content).question; } catch(e) { return r.content.substring(0, 150); }
+      try { return JSON.parse(r.content).question; } catch(e) { return r.content.substring(0, 400); }
     }).join('\n');
 
     const anchorList = anchors.rows.map(r => {
-      try { const a = JSON.parse(r.content); return a.title + ': ' + a.summary.substring(0, 100); } catch(e) { return r.content.substring(0, 150); }
+      try { const a = JSON.parse(r.content); return a.title + ': ' + a.summary.substring(0, 100); } catch(e) { return r.content.substring(0, 400); }
     }).join('\n');
 
     const searchTopics = searches.rows.map(r => {
@@ -1530,8 +1530,8 @@ app.post('/api/db/reinforce', async (req, res) => {
     const summaries = old.rows.map(r => {
       try {
         const parsed = JSON.parse(r.content);
-        return parsed.title || parsed.summary || r.content.substring(0, 150);
-      } catch(e) { return r.content.substring(0, 150); }
+        return parsed.title || parsed.summary || r.content.substring(0, 400);
+      } catch(e) { return r.content.substring(0, 400); }
     });
 
     await redisClient.set('ava:reinforcement', JSON.stringify(summaries), { EX: 86400 });
