@@ -1341,7 +1341,7 @@ app.post('/api/db/inquiry', async (req, res) => {
       const findings = findingMatch ? findingMatch[1].trim() : '';
       await pool.query(
         "INSERT INTO memories (memory_type, content, importance, confidence, source_type) VALUES ('semantic', $1, 0.75, 0.9, 'inquiry_archive')",
-        [JSON.stringify({ question: topic, findings: findings.substring(0, 500), date: row.created_at, still_wondering: '', influenced_conversations: false })]
+        [JSON.stringify({ question: topic, findings: findings.substring(0, 2000), date: row.created_at, still_wondering: '', influenced_conversations: false })]
       );
       archived++;
     }
