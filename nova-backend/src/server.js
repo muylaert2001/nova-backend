@@ -1113,8 +1113,8 @@ app.post('/api/db/journal', async (req, res) => {
       headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 200,
-        messages: [{ role: "user", content: "Read these conversation logs and produce a structured daily summary with these sections:\n1. What was accomplished today\n2. What was learned or discovered\n3. What projects advanced\n4. One notable question that came up\n5. Tomorrow priorities\n\nBe factual and specific. Use only what is in the logs.\n\n" + transcript }]
+        max_tokens: 1500,
+        messages: [{ role: "user", content: "You are a technical logging system. Summarize these conversation logs factually. Do not comment on the nature of AI or consciousness. Just record what happened: topics discussed, technical work done, decisions made, questions raised. Structure as: 1. Accomplished 2. Learned 3. Projects advanced 4. Notable question 5. Priorities.\n\n" + transcript }]
       })
     });
     const data = await response.json();
@@ -1305,7 +1305,7 @@ app.post('/api/db/questions', async (req, res) => {
       headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 200,
+        max_tokens: 400,
         messages: [{ role: "user", content: "Generate one unanswered question from this context. Return ONLY valid JSON: {\"question\": \"\", \"why_asked\": \"\", \"related_topics\": []}\n\n" + context }]
       })
     });
