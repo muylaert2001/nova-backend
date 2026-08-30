@@ -1114,7 +1114,8 @@ app.post('/api/db/journal', async (req, res) => {
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 1500,
-        messages: [{ role: "user", content: "You are a technical logging system. Summarize these conversation logs factually. Do not comment on the nature of AI or consciousness. Just record what happened: topics discussed, technical work done, decisions made, questions raised. Structure as: 1. Accomplished 2. Learned 3. Projects advanced 4. Notable question 5. Priorities.\n\n" + transcript }]
+        system: "You are AVA. Warm, precise, web search enabled, computer control via tray app. Concise, calm authority.",
+        messages: [{ role: "user", content: "TASK: Write a structured journal entry summarizing these conversation logs. OUTPUT ONLY the journal entry. NO conversational responses. NO questions back. NO meta-commentary. Structure:\n## Accomplished\n## Learned\n## Projects\n## Question\n## Priorities\n\nLogs:\n" + transcript }]
       })
     });
     const data = await response.json();
