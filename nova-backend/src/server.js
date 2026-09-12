@@ -218,6 +218,7 @@ app.post('/api/reminders', async (req, res) => {
 
 app.get('/api/reminders', async (req, res) => {
   try {
+    if (!redisClient.isReady) return;
     const keys = await redisClient.keys('reminder:*');
     const reminders = [];
     for (const key of keys) {
